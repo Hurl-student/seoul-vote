@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인구지표와 투표 다중 회귀 히트맵</title>
+<style>
+/* ───────── tokens ───────── */
+.hv {
+  color-scheme: light;
+  --plane:#f1efe8; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.045);
+  --lee:#1766e0; --yoon:#e22d2b; --turn:#52514e; --cellb:rgba(11,11,11,.10); --refline:rgba(11,11,11,.13);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])) .hv{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+    --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+  }
+}
+:root[data-theme="dark"] .hv{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+  --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+}
+
+/* ───────── base ───────── */
+html,body{ margin:0; background:#f1efe8; }
+.hv, .hv *{ box-sizing:border-box; }
+.hv{
+  background:var(--plane); color:var(--ink);
+  font:14px/1.5 "Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+  padding:32px clamp(12px,3vw,40px) 40px; min-height:100vh; overflow-x:hidden; -webkit-font-smoothing:antialiased;
+}
+.hv .wrap{ max-width:1320px; margin:0 auto; min-width:0; }
+.hv h1,.hv h2,.hv p{ margin:0; }
+.hv button{ font:inherit; color:inherit; cursor:pointer; }
+.hv svg{ display:block; overflow:visible; }
+.hv svg text{ font-family:inherit; }
+.hv button:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+.n{ font-feature-settings:"tnum"; }
+
+/* ───────── masthead ───────── */
+.hd{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px 48px; align-items:end; padding-bottom:22px; border-bottom:2px solid var(--ink); }
+.eyebrow{ font-size:12px; letter-spacing:.06em; color:var(--ink2); font-weight:600; display:flex; gap:10px; align-items:center; }
+.eyebrow::before{ content:""; width:18px; height:8px; background:linear-gradient(90deg,var(--lee) 50%,var(--yoon) 50%); display:inline-block; }
+#headline{ word-break:keep-all; font-size:clamp(22px,3vw,36px); line-height:1.22; letter-spacing:-.025em; font-weight:800; margin-top:10px; }
+.sub{ color:var(--ink2); margin-top:10px; max-width:70ch; }
+.hero .num{ font-size:clamp(44px,5.4vw,68px); line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.hero .cap{ font-size:12px; color:var(--ink2); margin-top:8px; font-weight:500; max-width:26ch; }
+
+/* ───────── filters ───────── */
+.filters{ display:flex; flex-wrap:wrap; gap:14px 36px; padding:16px 0 18px; align-items:flex-end; }
+.fg{ display:flex; flex-direction:column; gap:6px; min-width:0; max-width:100%; }
+.fl{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); }
+.seg{ display:inline-flex; flex-wrap:wrap; max-width:100%; border:1px solid var(--axis); border-radius:6px; background:var(--surface); padding:2px; gap:2px; }
+.seg button{ border:0; background:transparent; padding:6px 13px; border-radius:4px; font-weight:600; color:var(--ink2); white-space:nowrap; }
+.seg button:hover{ background:var(--wash); }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--surface); }
+.fnote{ font-size:13px; color:var(--ink2); max-width:70ch; align-self:flex-end; }
+.fnote b{ color:var(--ink); }
+
+/* ───────── layout ───────── */
+.grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px 22px 20px; min-width:0; }
+.ch{ margin-bottom:16px; }
+.ch h2{ font-size:16px; font-weight:800; letter-spacing:-.01em; }
+.cs{ color:var(--ink2); font-size:12.5px; margin-top:4px; }
+
+/* ───────── heatmap ───────── */
+.hm{ display:grid; grid-template-columns:minmax(104px,150px) repeat(3,minmax(0,1fr)); gap:6px; }
+.hm .ch-h{ padding:0 4px 8px; display:flex; flex-direction:column; justify-content:flex-end; gap:2px; border-bottom:1px solid var(--grid); }
+.hm .ch-h b{ font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:7px; line-height:1.25; }
+.hm .ch-h b i{ width:10px; height:10px; border-radius:50%; flex:none; background:var(--k); }
+.hm .ch-h span{ font-size:12px; color:var(--ink2); font-weight:500; }
+.hm .ch-h em{ font-style:normal; font-size:11.5px; color:var(--ink2); font-feature-settings:"tnum"; }
+.hm .rh{ display:flex; flex-direction:column; justify-content:center; padding:0 6px 0 2px; min-height:80px; }
+.hm .rh b{ font-size:13.5px; font-weight:800; line-height:1.25; }
+.hm .rh span{ font-size:11.5px; color:var(--ink2); }
+.hm .ch-h.on b, .hm .rh.on b{ text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:2px; }
+.cell{ position:relative; border:1px solid var(--cellb); border-radius:8px; min-height:80px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+       transition:background-color .3s ease, transform .12s, box-shadow .12s; }
+.cell:hover{ transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.18); }
+.cell .v{ font-size:22px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+.cell .t{ font-size:11px; font-weight:600; line-height:1.4; opacity:.88; font-feature-settings:"tnum"; border-radius:999px; padding:0 8px; }
+.cell .t.sig{ font-weight:800; opacity:1; background:color-mix(in srgb, currentColor 16%, transparent); }
+.cell[aria-pressed="true"]{ box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.hm .gauge{ height:6px; border-radius:3px; background:var(--wash); box-shadow:inset 0 0 0 1px var(--grid); overflow:hidden; margin:5px 0 3px; }
+.hm .gauge i{ display:block; height:100%; border-radius:3px; }
+.tg{ margin-left:auto; }
+.scale{ margin-top:20px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0 12px; align-items:center; font-size:12px; color:var(--ink2); font-weight:600; }
+.scale .bar{ height:12px; border-radius:6px; border:1px solid var(--grid); }
+.scale .lab{ display:flex; justify-content:space-between; grid-column:2; font-size:11.5px; color:var(--muted); margin-top:4px; font-feature-settings:"tnum"; }
+.scale small{ grid-column:1 / 4; margin-top:8px; font-size:12px; color:var(--muted); font-weight:500; }
+
+/* ───────── detail ───────── */
+.dt-top{ display:flex; gap:20px 32px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
+.dt-top .big{ font-size:48px; line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.dt-top .st{ display:flex; gap:20px; flex-wrap:wrap; }
+.dt-top .st div{ font-size:12px; color:var(--ink2); }
+.dt-top .st b{ display:block; font-size:15px; color:var(--ink); font-weight:800; }
+.read{ margin:0 0 14px; font-size:13px; color:var(--ink2); background:var(--wash); border-radius:6px; padding:10px 12px; }
+.read b{ color:var(--ink); }
+.read .warn{ color:var(--ink); font-weight:700; }
+#sc{ width:100%; }
+.xl{ font-size:11.5px; fill:var(--ink2); }
+.tick{ font-size:11px; fill:var(--muted); }
+.lbl{ font-size:11px; font-weight:700; fill:var(--ink); paint-order:stroke; stroke:var(--surface); stroke-width:3px; stroke-linejoin:round; }
+.keys{ display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; font-size:12px; color:var(--ink2); font-weight:600; }
+.keys span{ display:inline-flex; align-items:center; gap:7px; }
+.keys .ln{ width:18px; border-top:2px solid var(--ink2); display:inline-block; }
+.keys .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; background:var(--k); }
+.coef{ margin-top:18px; }
+.coef .sec{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+.coef .sec::after{ content:""; flex:1; border-top:1px solid var(--grid); }
+.coef .fit{ font-size:12.5px; color:var(--ink2); margin:0 0 8px; }
+.coef table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.coef th,.coef td{ text-align:right; padding:5px 8px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.coef th:first-child,.coef td:first-child{ text-align:left; }
+.coef th{ color:var(--ink2); font-weight:700; }
+.coef tr.on td{ background:var(--wash); font-weight:700; }
+.coef-wrap{ overflow-x:auto; }
+
+/* tooltip */
+.tip{ position:fixed; z-index:50; pointer-events:none; min-width:150px; max-width:280px; background:var(--surface); color:var(--ink);
+      border:1px solid var(--axis); border-radius:6px; padding:9px 11px; box-shadow:0 6px 24px rgba(0,0,0,.14); font-size:12.5px; opacity:0; transition:opacity .12s; }
+.tip.on{ opacity:1; }
+.tip .tt{ font-weight:800; font-size:13.5px; margin-bottom:4px; }
+.tip .row{ display:flex; gap:10px; padding:1px 0; }
+.tip .row .l{ color:var(--ink2); flex:1; }
+.tip .row .v{ font-weight:800; font-feature-settings:"tnum"; }
+.tip .ft{ color:var(--ink2); margin-top:4px; border-top:1px solid var(--grid); padding-top:4px; font-size:12px; }
+
+/* table + footer */
+details.tbl{ margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 22px; }
+details.tbl summary{ cursor:pointer; font-weight:800; }
+.tbl-wrap{ overflow:auto; max-height:460px; margin-top:12px; }
+.tbl-wrap table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.tbl-wrap th,.tbl-wrap td{ text-align:right; padding:5px 10px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.tbl-wrap th:first-child,.tbl-wrap td:first-child{ text-align:left; }
+.tbl-wrap th{ position:sticky; top:0; background:var(--surface); color:var(--ink2); font-weight:700; }
+.foot{ margin-top:18px; font-size:12px; color:var(--ink2); display:grid; gap:4px; max-width:108ch; }
+.foot b{ color:var(--ink); }
+
+@media (max-width: 980px){ .hd{ grid-template-columns:1fr; } .grid{ grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 560px){
+  .hv{ padding:20px 12px 28px; } .card{ padding:16px 12px; }
+  .hm{ grid-template-columns:minmax(80px,96px) repeat(3,minmax(0,1fr)); gap:4px; }
+  .cell .v{ font-size:16px; } .cell .t:not(.sig){ display:none; } .cell .t.sig{ font-size:9.5px; padding:0 5px; } .tg{ margin-left:0; } .hm .rh span{ display:none; } .hm .ch-h span{ display:none; } .hm .ch-h em{ font-size:10.5px; }
+}
+@media (prefers-reduced-motion: reduce){ .cell, .tip{ transition:none; } }
+
+/* ───────── embed (웹앱 iframe 안) ───────── */
+html.embed, html.embed body{ background:#f3f4f0 !important; color-scheme:light; }
+html.embed[data-theme="dark"], html.embed[data-theme="dark"] body{ background:#0b0c0c !important; color-scheme:dark; }
+html.embed #root{ background:transparent; padding:4px 0 8px; min-height:0; }
+@media (min-width: 900px){ html.embed .wrap{ zoom:.87; } }
+html.embed .tg, html.embed #seg-theme{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="hv" id="root">
+<div class="wrap">
+
+  <header class="hd">
+    <div>
+      <p class="eyebrow">서울특별시 25개 자치구 · 인구지표 × 투표 성향 · 다중 회귀</p>
+      <h1 id="headline"></h1>
+      <p class="sub" id="subline"></p>
+    </div>
+    <div class="hero" id="hero" aria-live="polite"></div>
+  </header>
+
+  <section class="filters" aria-label="보기 설정">
+    <p class="fnote">부양비·노령화지수·중위연령·평균연령을 <b>모두 한꺼번에 넣은</b> 다중 회귀 결과입니다. <b>+</b>는 그 지표가 높은 구일수록 투표율·득표율이 높아지는 방향, <b>−</b>는 낮아지는 방향이며, 다른 지표를 함께 고려한 값입니다. 인구지표는 2025년, 투표는 2022년 자료라 3년 시차가 있습니다.</p>
+    <div class="fg tg"><span class="fl">화면</span>
+      <div class="seg" id="seg-theme" role="group" aria-label="화면 모드">
+        <button data-v="auto" aria-pressed="true">자동</button>
+        <button data-v="light" aria-pressed="false">라이트</button>
+        <button data-v="dark" aria-pressed="false">다크</button>
+      </div></div>
+  </section>
+
+  <main class="grid">
+    <article class="card">
+      <div class="ch"><h2>인구지표별 다중 회귀 히트맵</h2>
+        <p class="cs">칸 안의 숫자는 표준화 회귀계수 β입니다. 인구지표를 한꺼번에 넣고 다른 지표를 함께 고려한 값이며, 색이 진할수록 |β|가 큽니다. 칸을 누르면 오른쪽에 자세히 나옵니다.</p></div>
+      <div class="hm" id="hm" role="grid" aria-label="인구지표와 투표율·득표율의 다중 회귀 표준화 계수"></div>
+      <div class="scale" id="scale"></div>
+    </article>
+
+    <article class="card" id="c-detail">
+      <div class="ch"><h2 id="dt-title"></h2><p class="cs" id="dt-sub"></p></div>
+      <div class="dt-top" id="dt-top"></div>
+      <p class="read" id="dt-read"></p>
+      <div id="sc"></div>
+      <div class="keys" id="sc-keys"></div>
+      <div class="coef" id="coef"></div>
+    </article>
+  </main>
+
+  <details class="tbl" id="tables">
+    <summary>표로 보기 (3개 모형의 회귀계수 · 구별 원자료)</summary>
+    <div class="tbl-wrap" id="t-models"></div>
+    <div class="tbl-wrap" id="t-gu"></div>
+  </details>
+
+  <footer class="foot">
+    <p><b>모형:</b> 결과변수(전체 투표율 / 윤석열 득표율 / 이재명 득표율) 각각에 대해 25개 구를 관측치로, 유소년부양비·노년부양비·노령화지수·중위연령·평균연령 5개를 <b>모두</b> 설명변수로 넣은 최소제곱 다중 회귀입니다. 총부양비는 유소년부양비 + 노년부양비라 셋을 동시에 넣을 수 없으므로(완전 공선), 총부양비 행은 <b>총부양비가 1 늘고 그 증가분이 유소년·노년 부양비에 25개 구 평균 비율대로 나뉘어 반영될 때</b>의 효과(두 계수의 가중 결합)로 계산했습니다. β는 표준화 계수(= B × 설명변수 표준편차 ÷ 결과변수 표준편차)로 지표끼리 크기를 비교할 수 있으며, 색은 |β| 1.5에서 최대입니다. B는 노령화지수는 10당, 나머지는 1(세)당 효과입니다.</p>
+    <p><b>주의:</b> 25개 구에 변수 5개라 잔차 자유도가 19뿐이고, 중위연령·평균연령·노령화지수·부양비는 서로 매우 비슷하게 움직여(VIF 10~46) 개별 계수가 불안정하고 부호가 직관과 반대로 나오기도 합니다. 모형 전체의 설명력(R²)과 95% 신뢰구간을 함께 보세요. 인구지표는 2025년, 투표·득표는 2022년 자료라 3년 시차가 있으며, 총부양비는 유소년+노년 부양비의 합(파일 표기값과 반올림 차이 0.1 이내)으로 계산했습니다. 구 단위 관계이므로 인과나 개인의 선택으로 해석할 수 없습니다.</p>
+    <p><b>자료:</b> 전체 투표율은 「성별·연령대별 투표율(구시군별)」의 구별 합계 투표율(선관위 표본 투표구 기준), 득표율은 서울 득표율 자료의 윤석열·이재명 득표수 ÷ 유효투표수, 인구지표는 KOSIS 「주요 인구지표(부양비, 노령화지수, 중위연령 등) - 시군구」(인구총조사 2025). 출처: 중앙선거관리위원회 · 공공데이터포털 · 국가데이터처 KOSIS</p>
+  </footer>
+</div>
+<div class="tip" id="tip" role="status"></div>
+</div>
+
+<script>
+{ const q0 = new URLSearchParams(location.search); if (q0.get('embed')) document.documentElement.classList.add('embed'); }
+const DATA = __DATA__;
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const S = (tag, a = {}, p) => { const n = document.createElementNS(SVGNS, tag); for (const k in a) n.setAttribute(k, a[k]); if (p) p.appendChild(n); return n; };
+const H = (tag, a = {}, p) => { const n = document.createElement(tag); for (const k in a) { if (k === 'text') n.textContent = a[k]; else if (k === 'class') n.className = a[k]; else n.setAttribute(k, a[k]); } if (p) p.appendChild(n); return n; };
+const sgn = (v, d) => { const s = Math.abs(v).toFixed(d); return (+s === 0) ? (0).toFixed(d) : (v >= 0 ? '+' : '−') + s; };
+const fr = v => sgn(v, 2);
+const fb = v => Math.abs(v) < 0.1 ? sgn(v, 3) : sgn(v, 2);
+const f1 = v => v.toFixed(1);
+const fp = p => p < 0.001 ? '<0.001' : p.toFixed(3);
+const SAT = 1.5;
+const pTxt = p => p < 0.001 ? 'p<0.001' : 'p=' + p.toFixed(3);
+const hasBatchim = w => { const c = w.charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0; };
+const pick = (w, a, b) => w + (hasBatchim(w) ? a : b);
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+
+/* ───────── 색 (OKLCH) : 중립(회색) → 양(+)은 빨강, 음(−)은 파랑. 진할수록 |β| 큼 ───────── */
+function oklch2hex(L, C, h) {
+  const g = c => c <= .0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - .055;
+  for (let k = 0; k < 60; k++) {
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    const l = (L + .3963377774 * a + .2158037573 * b) ** 3, m = (L - .1055613458 * a - .0638541728 * b) ** 3, s = (L - .0894841775 * a - 1.291485548 * b) ** 3;
+    const rgb = [4.0767416621 * l - 3.3077115913 * m + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s, -.0041960863 * l - .7034186147 * m + 1.707614701 * s];
+    if (rgb.every(v => v >= -1e-4 && v <= 1 + 1e-4) || k === 59) return '#' + rgb.map(v => Math.round(g(Math.min(1, Math.max(0, v))) * 255).toString(16).padStart(2, '0')).join('');
+    C *= .95;
+  }
+}
+function colorOf(r) {
+  const t = Math.min(1, Math.abs(r) / SAT), h = r >= 0 ? 27 : 258, dark = isDark();
+  const L = dark ? .33 + .27 * t : .955 - .60 * t;
+  const C = (r >= 0 ? .215 : .19) * Math.min(1, t * 1.35);
+  return oklch2hex(L, C, h);
+}
+const lum = hex => { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+const contrast = (a, b) => (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+const textOn = hex => { const L = lum(hex); return contrast(L, 1) >= contrast(L, 0) ? '#ffffff' : '#000000'; };
+
+/* ───────── 데이터 ───────── */
+const G = DATA.districts, MR = DATA.mr, ROWS = DATA.rows, YSHARE = DATA.share;   // MR[결과변수] = 인구지표를 모두 넣은 다중 회귀 모형 (viz/build_pop_heatmap.py → viz/mreg.py)
+const COLS = [
+  { key: 'turn', label: '전체 투표율', sub: '서울 25개 구 투표율', css: 'var(--turn)' },
+  { key: 'yoon', label: '보수 득표율', sub: '윤석열', css: 'var(--yoon)' },
+  { key: 'lee', label: '진보 득표율', sub: '이재명', css: 'var(--lee)' },
+];
+const state = { sel: null, pin: null };
+{ const q = new URLSearchParams(location.search); if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme'); }
+const model = c => MR[c];
+const coefOf = (i, c) => model(c).coefs.find(k => k.i === i);
+const NTOT = 0;                                    // 행 0 = 총부양비 (유소년+노년의 합)
+const fx = (i, v) => v.toFixed(ROWS[i].dec) + (ROWS[i].unit || '');
+const bStep = (i, v) => v * ROWS[i].step;          // 단위(step)당 효과
+const stepLbl = i => ROWS[i].stepTxt;
+const mixTxt = `${(YSHARE * 100).toFixed(0)}:${((1 - YSHARE) * 100).toFixed(0)}`;
+
+function sentence(i, c) {
+  const k = coefOf(i, c), sig = k.p < 0.05, dir = k.b > 0 ? '높아' : '낮아';
+  const bb = Math.abs(bStep(i, k.b)), bt = bb < 0.1 ? bb.toFixed(3) : bb.toFixed(2);
+  const head = i === NTOT
+    ? `총부양비가 1 늘어나고 그 증가분이 유소년:노년 = ${mixTxt}(25개 구 평균 비율)로 나뉘어 반영되면, 다른 지표를 함께 고려했을 때 ${COLS[c].label}이 ${bt}%p ${dir}지는 경향`
+    : `다른 지표를 함께 고려했을 때 ${ROWS[i].label}가 ${stepLbl(i)} 높은 구일수록 ${COLS[c].label}이 ${bt}%p ${dir}지는 경향`;
+  return [head, sig ? `p=${fp(k.p)}로 5% 수준에서 유의합니다.` : `p=${fp(k.p)}로 유의하지 않습니다(우연과 구분하기 어려움).`];
+}
+
+/* ───────── 툴팁 ───────── */
+const tip = $('#tip');
+function showTip(build, ev) { tip.replaceChildren(); build(tip); tip.classList.add('on'); moveTip(ev); }
+function moveTip(ev) { const r = tip.getBoundingClientRect(); let x = ev.clientX + 16, y = ev.clientY + 14; if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 16; if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14; tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px'; }
+const hideTip = () => tip.classList.remove('on');
+const tipRow = (p, l, v) => { const r = H('div', { class: 'row' }, p); H('span', { class: 'l', text: l }, r); H('span', { class: 'v', text: v }, r); };
+
+/* ───────── 히트맵 ───────── */
+function renderHeatmap() {
+  const hm = $('#hm'); hm.replaceChildren();
+  H('div', {}, hm);
+  COLS.forEach((c, j) => {
+    const mo = model(j), h = H('div', { class: 'ch-h', 'data-c': j }, hm);
+    const b = H('b', {}, h); const i = H('i', {}, b); i.style.setProperty('--k', c.css); b.append(c.label);
+    H('span', { text: c.sub }, h);
+    const g = H('div', { class: 'gauge', role: 'img', 'aria-label': `설명력 R² ${mo.r2.toFixed(2)}` }, h); const gi = H('i', {}, g); gi.style.width = (mo.r2 * 100).toFixed(1) + '%'; gi.style.background = c.css;
+    H('em', { text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)}` }, h);
+    H('em', { text: `F검정 ${pTxt(mo.pF)}` }, h);
+  });
+  ROWS.forEach((r, i) => {
+    const rh = H('div', { class: 'rh', 'data-r': i }, hm); H('b', { text: r.label }, rh); H('span', { text: r.desc }, rh);
+    COLS.forEach((c, j) => {
+      const k = coefOf(i, j), bg = colorOf(k.beta);
+      const b = H('button', { class: 'cell', type: 'button', 'data-r': i, 'data-c': j, 'aria-pressed': String(!!state.sel && state.sel[0] === i && state.sel[1] === j), 'aria-label': `${r.label} → ${c.label} 표준화 계수 ${fr(k.beta)}` }, hm);
+      b.style.backgroundColor = bg; b.style.color = textOn(bg);
+      H('span', { class: 'v n', text: fr(k.beta) }, b); H('span', { class: 't n' + (k.p < 0.05 ? ' sig' : ''), text: (k.p < 0.05 ? '유의 · ' : '') + pTxt(k.p) }, b);
+      b.addEventListener('click', () => { state.sel = [i, j]; state.pin = null; renderAll(); });
+      b.addEventListener('pointerenter', e => { mark(i, j, true); showTip(p => { H('div', { class: 'tt', text: `${r.label} → ${c.label}` }, p); tipRow(p, '표준화 계수 β', fr(k.beta)); tipRow(p, `효과 B (${stepLbl(i)}당)`, `${fb(bStep(i, k.b))}%p`); tipRow(p, '95% 신뢰구간', `[${fb(bStep(i, k.lo))}, ${fb(bStep(i, k.hi))}]`); tipRow(p, 'p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')); }, e); });
+      b.addEventListener('pointermove', moveTip);
+      b.addEventListener('pointerleave', () => { mark(i, j, false); hideTip(); });
+      b.addEventListener('focus', () => mark(i, j, true)); b.addEventListener('blur', () => mark(i, j, false));
+    });
+  });
+  const sc = $('#scale'); sc.replaceChildren();
+  const stops = Array.from({ length: 15 }, (_, k) => colorOf(-SAT + 2 * SAT * k / 14));
+  H('span', { text: '음(−) 효과' }, sc);
+  const bar = H('div', { class: 'bar' }, sc); bar.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+  H('span', { text: '양(+) 효과' }, sc);
+  const lab = H('div', { class: 'lab' }, sc); ['−1.5', '−0.75', '0', '+0.75', '+1.5'].forEach(t => H('span', { text: t }, lab));
+  H('small', { text: '색이 진할수록(다크 모드에서는 밝고 선명할수록) |β|가 큽니다 (|β| 1.5 이상은 같은 진하기). 빨간색 = 그 지표가 높은 구일수록 결과가 높은 효과, 파란색 = 낮은 효과, 회색에 가까울수록 차이 없음. “유의”는 p < 0.05.' }, sc);
+}
+function mark(i, j, on) {
+  document.querySelectorAll('.hm .rh').forEach(n => n.classList.toggle('on', on && +n.dataset.r === i));
+  document.querySelectorAll('.hm .ch-h').forEach(n => n.classList.toggle('on', on && +n.dataset.c === j));
+}
+
+/* ───────── 상세: 부분 회귀 산점도 + 계수표 ───────── */
+function niceTicks(lo, hi, n = 5) {
+  const raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, step = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10)); return out;
+}
+function renderDetail() {
+  const [i, j] = state.sel, k = coefOf(i, j), col = COLS[j], mo = model(j), R = ROWS[i];
+  $('#dt-title').textContent = `${R.label} → ${col.label}`;
+  $('#dt-sub').textContent = `점 하나가 구 하나(25개 구) · 가로축은 ${R.label}${i === NTOT ? '(유소년+노년)' : ''}, 세로축은 ${col.label}에서 다른 지표의 영향을 뺀 값입니다`;
+  const top = $('#dt-top'); top.replaceChildren();
+  const big = H('div', { class: 'big n', text: fr(k.beta) }, top); big.style.color = col.css === 'var(--turn)' ? 'var(--ink)' : col.css;
+  const sx = H('div', { class: 'st' }, top);
+  [['표준화 계수 β', fr(k.beta)], [`효과 B (${stepLbl(i)}당)`, `${fb(bStep(i, k.b))}%p`], ['95% 신뢰구간', `[${fb(bStep(i, k.lo))}, ${fb(bStep(i, k.hi))}]`], ['p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')]]
+    .forEach(([a, b]) => { const d = H('div', {}, sx); H('b', { class: 'n', text: b }, d); d.append(a); });
+  const [s1, s2] = sentence(i, j); const rd = $('#dt-read'); rd.replaceChildren(); H('b', { text: s1 + '. ' }, rd); rd.append(s2);
+  if (k.vif >= 10) H('span', { class: 'warn', text: ` 이 지표는 다른 지표와 정보가 많이 겹쳐(VIF ${k.vif.toFixed(0)}) 계수가 불안정할 수 있습니다.` }, rd);
+
+  const host = $('#sc'); host.replaceChildren();
+  const W = Math.max(300, host.clientWidth || 560), Hh = 340, m = { l: 50, r: 22, t: 30, b: 48 };
+  const svg = S('svg', { width: W, height: Hh, viewBox: `0 0 ${W} ${Hh}`, role: 'img', 'aria-label': `${R.label}와 ${col.label}의 부분잔차 산점도` }, host);
+  const xs = k.cpr.map(a => a[0]), ys = k.cpr.map(a => a[1]);
+  const pad = (a, b) => [a - (b - a) * .1, b + (b - a) * .1];
+  const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
+  const X = v => m.l + (W - m.l - m.r) * (v - x0) / (x1 - x0), Y = v => m.t + (Hh - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+  const fy = v => v.toFixed(0) + '%';
+  niceTicks(y0, y1).forEach(v => { S('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)' }, svg); const t = S('text', { x: m.l - 8, y: Y(v), class: 'tick', 'text-anchor': 'end', 'dominant-baseline': 'central' }, svg); t.textContent = fy(v); });
+  niceTicks(x0, x1).forEach(v => { const t = S('text', { x: X(v), y: Hh - m.b + 18, class: 'tick', 'text-anchor': 'middle' }, svg); t.textContent = v.toFixed(R.dec === 0 ? 0 : 1); });
+  S('line', { x1: m.l, x2: W - m.r, y1: Hh - m.b, y2: Hh - m.b, stroke: 'var(--axis)' }, svg);
+  const xt = S('text', { x: m.l + (W - m.l - m.r) / 2, y: Hh - 6, class: 'xl', 'text-anchor': 'middle' }, svg); xt.textContent = R.unit ? `${R.label} (${R.unit})` : R.label;
+  const yt = S('text', { x: 0, y: 12, class: 'tick' }, svg); yt.textContent = `${col.label} (다른 지표의 영향을 뺀 값, %)`;
+  // 회귀선: 부분잔차 = a + b·x 이므로 기울기가 이 지표의 계수 B
+  S('line', { x1: X(x0), y1: Y(mo.a + k.b * x0), x2: X(x1), y2: Y(mo.a + k.b * x1), stroke: 'var(--ink2)', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg);
+  const pc = col.css === 'var(--turn)' ? 'var(--ink2)' : col.css;
+  const res = ys.map((y, n) => y - (mo.a + k.b * xs[n])), sdr = Math.sqrt(res.reduce((a, b) => a + b * b, 0) / mo.df);
+  const labeled = new Set(); res.forEach((e, n) => { if (Math.abs(e) > 1.5 * sdr) labeled.add(n); });
+  labeled.add(xs.indexOf(Math.min(...xs))); labeled.add(xs.indexOf(Math.max(...xs)));
+  if (state.pin !== null) labeled.add(state.pin);
+  const dots = [];
+  G.forEach((d, n) => {
+    const on = state.pin === n;
+    dots.push(S('circle', { cx: X(xs[n]), cy: Y(ys[n]), r: on ? 6.5 : 5, fill: pc, stroke: on ? 'var(--ink)' : 'var(--surface)', 'stroke-width': on ? 2.5 : 2, 'fill-opacity': .92 }, svg));
+    if (labeled.has(n)) { const t = S('text', { x: X(xs[n]) + 9, y: Y(ys[n]) - 7, class: 'lbl' }, svg); t.textContent = d.name; }
+  });
+  const hit = S('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: Hh - m.t - m.b, fill: 'transparent', style: 'cursor:pointer' }, svg);
+  const near = e => { const b = svg.getBoundingClientRect(), s0 = W / b.width, px = (e.clientX - b.left) * s0, py = (e.clientY - b.top) * s0; let best = -1, bd = 1e9; G.forEach((_, n) => { const dd = Math.hypot(X(xs[n]) - px, Y(ys[n]) - py); if (dd < bd) { bd = dd; best = n; } }); return bd < 36 ? best : -1; };
+  let last = -1;
+  const over = e => {
+    const n = near(e); if (last >= 0 && last !== n) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5);
+    last = n; if (n < 0) { hideTip(); return; }
+    dots[n].setAttribute('r', 7.5);
+    showTip(p => { H('div', { class: 'tt', text: G[n].name }, p); tipRow(p, R.label, fx(i, xs[n])); tipRow(p, col.label + ' (실제)', f1(G[n][col.key]) + '%'); tipRow(p, '다른 지표 영향을 뺀 값', f1(ys[n]) + '%'); tipRow(p, '회귀선과의 차이', (res[n] >= 0 ? '+' : '−') + Math.abs(res[n]).toFixed(1) + '%p'); }, e);
+  };
+  hit.addEventListener('pointermove', over); hit.addEventListener('pointerenter', over);
+  hit.addEventListener('pointerleave', () => { if (last >= 0) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5); last = -1; hideTip(); });
+  hit.addEventListener('click', e => { const n = near(e); state.pin = n < 0 || n === state.pin ? null : n; renderDetail(); });
+  const ky = $('#sc-keys'); ky.replaceChildren();
+  let sp = H('span', {}, ky); const d = H('span', { class: 'dot' }, sp); d.style.setProperty('--k', pc); sp.append('구 (점을 누르면 이름 고정)');
+  sp = H('span', {}, ky); H('span', { class: 'ln' }, sp); sp.append(`회귀선 (${stepLbl(i)}당 B ${fb(bStep(i, k.b))})`);
+
+  // 계수표 (선택한 결과변수의 전체 모형: 6개 행 모두)
+  const cf = $('#coef'); cf.replaceChildren();
+  H('p', { class: 'sec', text: `${col.label} 다중 회귀 모형 (n=${mo.n}, 잔차 자유도 ${mo.df})` }, cf);
+  H('p', { class: 'fit', text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)} · F=${mo.F.toFixed(2)} (p=${fp(mo.pF)}) → ${mo.pF < 0.05 ? '모형 전체가 유의합니다' : '모형 전체가 유의하지 않습니다'}` }, cf);
+  const wrap = H('div', { class: 'coef-wrap' }, cf), t = H('table', {}, wrap), h = H('tr', {}, H('thead', {}, t));
+  ['지표 (B 단위)', 'B', 'β', '95% 신뢰구간', 'p', 'VIF'].forEach(x => H('th', { text: x }, h));
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const c = coefOf(n, j), tr = H('tr', {}, tb); if (n === i) tr.className = 'on';
+    [`${r.label} (${stepLbl(n)}당)`, fb(bStep(n, c.b)), fr(c.beta), `[${fb(bStep(n, c.lo))}, ${fb(bStep(n, c.hi))}]`, fp(c.p) + (c.p < 0.05 ? ' *' : ''), c.vif.toFixed(1)].forEach(x => H('td', { text: x }, tr));
+  });
+}
+
+/* ───────── 헤더 / 표 ───────── */
+function bestCell() {
+  let best = null;
+  ROWS.forEach((_, i) => COLS.forEach((_, j) => { const k = coefOf(i, j); const score = Math.abs(k.beta) + (k.p < 0.05 ? 10 : 0); if (!best || score > best.s) best = { i, j, s: score }; }));
+  return [best.i, best.j];
+}
+function renderHeader() {
+  const [bi, bj] = bestCell(), k = coefOf(bi, bj);
+  $('#headline').textContent = `${pick(ROWS[bi].label, '은', '는')} 다른 인구지표를 함께 고려해도 ${pick(COLS[bj].label, '과', '와')} 가장 뚜렷하게 연결된다`;
+  const fitTxt = COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)}`).join(' · ');
+  $('#subline').textContent = `인구지표(부양비·노령화지수·중위연령·평균연령)를 한꺼번에 넣은 다중 회귀(25개 구)입니다 — ${fitTxt}. 각 값은 지표끼리 크기를 비교할 수 있게 표준화한 계수 β입니다.`;
+  const hero = $('#hero'); hero.replaceChildren();
+  H('div', { class: 'num n', text: fr(k.beta) }, hero); H('div', { class: 'cap', text: `β · ${ROWS[bi].label} → ${COLS[bj].label}${k.p < 0.05 ? ' (p<0.05)' : ''}` }, hero);
+  return [bi, bj];
+}
+function renderTables() {
+  const a = $('#t-models'); a.replaceChildren();
+  const t = H('table', {}, a), h = H('tr', {}, H('thead', {}, t));
+  H('th', { text: '인구지표 (B 단위)' }, h); COLS.forEach(c => ['B', 'β', 'p'].forEach(x => H('th', { text: `${c.label.replace(' 득표율', '')} ${x}` }, h))); H('th', { text: 'VIF' }, h);
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const tr = H('tr', {}, tb); H('td', { text: `${r.label} (${stepLbl(n)}당)` }, tr);
+    COLS.forEach((_, j) => { const c = coefOf(n, j); [fb(bStep(n, c.b)), fr(c.beta), fp(c.p) + (c.p < 0.05 ? ' *' : '')].forEach(x => H('td', { text: x }, tr)); });
+    H('td', { text: coefOf(n, 0).vif.toFixed(1) }, tr);
+  });
+  H('caption', { text: `${COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)} (수정 ${model(j).adj.toFixed(2)}, F p=${fp(model(j).pF)})`).join(' · ')} · B = 해당 단위만큼 높은 구에서 결과가 몇 %p 다른지 · * p<0.05` }, t);
+  const g = $('#t-gu'); g.replaceChildren();
+  const t2 = H('table', {}, g), h2 = H('tr', {}, H('thead', {}, t2));
+  ['자치구', ...ROWS.map(r => r.label), '전체 투표율', '윤석열 %', '이재명 %'].forEach(x => H('th', { text: x }, h2));
+  const tb2 = H('tbody', {}, t2);
+  G.forEach(d => { const tr = H('tr', {}, tb2); [d.name, ...ROWS.map((_, i) => d.x[i].toFixed(ROWS[i].dec)), f1(d.turn), f1(d.yoon), f1(d.lee)].forEach(x => H('td', { text: x }, tr)); });
+}
+function renderAll() {
+  const th = document.documentElement.dataset.theme || 'auto';
+  document.querySelectorAll('#seg-theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === th)));
+  const best = renderHeader(); if (!state.sel) state.sel = best;
+  renderHeatmap(); renderDetail(); renderTables();
+}
+$('#seg-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = b.dataset.v; });
+renderAll();
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(renderDetail, 80); }).observe($('#c-detail'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

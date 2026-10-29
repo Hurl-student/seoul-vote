@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>가구 구성과 투표 다중 회귀 히트맵</title>
+<style>
+/* ───────── tokens ───────── */
+.hv {
+  color-scheme: light;
+  --plane:#f1efe8; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.045);
+  --lee:#1766e0; --yoon:#e22d2b; --turn:#52514e; --cellb:rgba(11,11,11,.10); --refline:rgba(11,11,11,.13);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])) .hv{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+    --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+  }
+}
+:root[data-theme="dark"] .hv{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+  --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+}
+
+/* ───────── base ───────── */
+html,body{ margin:0; background:#f1efe8; }
+.hv, .hv *{ box-sizing:border-box; }
+.hv{
+  background:var(--plane); color:var(--ink);
+  font:14px/1.5 "Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+  padding:32px clamp(12px,3vw,40px) 40px; min-height:100vh; overflow-x:hidden; -webkit-font-smoothing:antialiased;
+}
+.hv .wrap{ max-width:1320px; margin:0 auto; min-width:0; }
+.hv h1,.hv h2,.hv p{ margin:0; }
+.hv button{ font:inherit; color:inherit; cursor:pointer; }
+.hv svg{ display:block; overflow:visible; }
+.hv svg text{ font-family:inherit; }
+.hv button:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+.n{ font-feature-settings:"tnum"; }
+
+/* ───────── masthead ───────── */
+.hd{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px 48px; align-items:end; padding-bottom:22px; border-bottom:2px solid var(--ink); }
+.eyebrow{ font-size:12px; letter-spacing:.06em; color:var(--ink2); font-weight:600; display:flex; gap:10px; align-items:center; }
+.eyebrow::before{ content:""; width:18px; height:8px; background:linear-gradient(90deg,var(--lee) 50%,var(--yoon) 50%); display:inline-block; }
+#headline{ word-break:keep-all; font-size:clamp(22px,3vw,36px); line-height:1.22; letter-spacing:-.025em; font-weight:800; margin-top:10px; }
+.sub{ color:var(--ink2); margin-top:10px; max-width:70ch; }
+.hero .num{ font-size:clamp(44px,5.4vw,68px); line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.hero .cap{ font-size:12px; color:var(--ink2); margin-top:8px; font-weight:500; max-width:26ch; }
+
+/* ───────── filters ───────── */
+.filters{ display:flex; flex-wrap:wrap; gap:14px 36px; padding:16px 0 18px; align-items:flex-end; }
+.fg{ display:flex; flex-direction:column; gap:6px; min-width:0; max-width:100%; }
+.fl{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); }
+.seg{ display:inline-flex; flex-wrap:wrap; max-width:100%; border:1px solid var(--axis); border-radius:6px; background:var(--surface); padding:2px; gap:2px; }
+.seg button{ border:0; background:transparent; padding:6px 13px; border-radius:4px; font-weight:600; color:var(--ink2); white-space:nowrap; }
+.seg button:hover{ background:var(--wash); }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--surface); }
+.fnote{ font-size:13px; color:var(--ink2); max-width:70ch; align-self:flex-end; }
+.fnote b{ color:var(--ink); }
+
+/* ───────── layout ───────── */
+.grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px 22px 20px; min-width:0; }
+.ch{ margin-bottom:16px; }
+.ch h2{ font-size:16px; font-weight:800; letter-spacing:-.01em; }
+.cs{ color:var(--ink2); font-size:12.5px; margin-top:4px; }
+
+/* ───────── heatmap ───────── */
+.hm{ display:grid; grid-template-columns:minmax(104px,150px) repeat(3,minmax(0,1fr)); gap:6px; }
+.hm .ch-h{ padding:0 4px 8px; display:flex; flex-direction:column; justify-content:flex-end; gap:2px; border-bottom:1px solid var(--grid); }
+.hm .ch-h b{ font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:7px; line-height:1.25; }
+.hm .ch-h b i{ width:10px; height:10px; border-radius:50%; flex:none; background:var(--k); }
+.hm .ch-h span{ font-size:12px; color:var(--ink2); font-weight:500; }
+.hm .ch-h em{ font-style:normal; font-size:11.5px; color:var(--ink2); font-feature-settings:"tnum"; }
+.hm .rh{ display:flex; flex-direction:column; justify-content:center; padding:0 6px 0 2px; min-height:80px; }
+.hm .rh b{ font-size:13.5px; font-weight:800; line-height:1.25; }
+.hm .rh span{ font-size:11.5px; color:var(--ink2); }
+.hm .ch-h.on b, .hm .rh.on b{ text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:2px; }
+.cell{ position:relative; border:1px solid var(--cellb); border-radius:8px; min-height:80px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+       transition:background-color .3s ease, transform .12s, box-shadow .12s; }
+.cell:hover{ transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.18); }
+.cell .v{ font-size:22px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+.cell .t{ font-size:11px; font-weight:600; line-height:1.4; opacity:.88; font-feature-settings:"tnum"; border-radius:999px; padding:0 8px; }
+.cell .t.sig{ font-weight:800; opacity:1; background:color-mix(in srgb, currentColor 16%, transparent); }
+.cell[aria-pressed="true"]{ box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.hm .gauge{ height:6px; border-radius:3px; background:var(--wash); box-shadow:inset 0 0 0 1px var(--grid); overflow:hidden; margin:5px 0 3px; }
+.hm .gauge i{ display:block; height:100%; border-radius:3px; }
+.tg{ margin-left:auto; }
+.scale{ margin-top:20px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0 12px; align-items:center; font-size:12px; color:var(--ink2); font-weight:600; }
+.scale .bar{ height:12px; border-radius:6px; border:1px solid var(--grid); }
+.scale .lab{ display:flex; justify-content:space-between; grid-column:2; font-size:11.5px; color:var(--muted); margin-top:4px; font-feature-settings:"tnum"; }
+.scale small{ grid-column:1 / 4; margin-top:8px; font-size:12px; color:var(--muted); font-weight:500; }
+
+/* ───────── detail ───────── */
+.dt-top{ display:flex; gap:20px 32px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
+.dt-top .big{ font-size:48px; line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.dt-top .st{ display:flex; gap:20px; flex-wrap:wrap; }
+.dt-top .st div{ font-size:12px; color:var(--ink2); }
+.dt-top .st b{ display:block; font-size:15px; color:var(--ink); font-weight:800; }
+.read{ margin:0 0 14px; font-size:13px; color:var(--ink2); background:var(--wash); border-radius:6px; padding:10px 12px; }
+.read b{ color:var(--ink); }
+#sc{ width:100%; }
+.xl{ font-size:11.5px; fill:var(--ink2); }
+.tick{ font-size:11px; fill:var(--muted); }
+.lbl{ font-size:11px; font-weight:700; fill:var(--ink); paint-order:stroke; stroke:var(--surface); stroke-width:3px; stroke-linejoin:round; }
+.keys{ display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; font-size:12px; color:var(--ink2); font-weight:600; }
+.keys span{ display:inline-flex; align-items:center; gap:7px; }
+.keys .ln{ width:18px; border-top:2px solid var(--ink2); display:inline-block; }
+.keys .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; background:var(--k); }
+.coef{ margin-top:18px; }
+.coef .sec{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+.coef .sec::after{ content:""; flex:1; border-top:1px solid var(--grid); }
+.coef .fit{ font-size:12.5px; color:var(--ink2); margin:0 0 8px; }
+.coef table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.coef th,.coef td{ text-align:right; padding:5px 8px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.coef th:first-child,.coef td:first-child{ text-align:left; }
+.coef th{ color:var(--ink2); font-weight:700; }
+.coef tr.on td{ background:var(--wash); font-weight:700; }
+.coef-wrap{ overflow-x:auto; }
+
+/* tooltip */
+.tip{ position:fixed; z-index:50; pointer-events:none; min-width:150px; max-width:280px; background:var(--surface); color:var(--ink);
+      border:1px solid var(--axis); border-radius:6px; padding:9px 11px; box-shadow:0 6px 24px rgba(0,0,0,.14); font-size:12.5px; opacity:0; transition:opacity .12s; }
+.tip.on{ opacity:1; }
+.tip .tt{ font-weight:800; font-size:13.5px; margin-bottom:4px; }
+.tip .row{ display:flex; gap:10px; padding:1px 0; }
+.tip .row .l{ color:var(--ink2); flex:1; }
+.tip .row .v{ font-weight:800; font-feature-settings:"tnum"; }
+.tip .ft{ color:var(--ink2); margin-top:4px; border-top:1px solid var(--grid); padding-top:4px; font-size:12px; }
+
+/* table + footer */
+details.tbl{ margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 22px; }
+details.tbl summary{ cursor:pointer; font-weight:800; }
+.tbl-wrap{ overflow:auto; max-height:460px; margin-top:12px; }
+.tbl-wrap table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.tbl-wrap th,.tbl-wrap td{ text-align:right; padding:5px 10px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.tbl-wrap th:first-child,.tbl-wrap td:first-child{ text-align:left; }
+.tbl-wrap th{ position:sticky; top:0; background:var(--surface); color:var(--ink2); font-weight:700; }
+.foot{ margin-top:18px; font-size:12px; color:var(--ink2); display:grid; gap:4px; max-width:108ch; }
+.foot b{ color:var(--ink); }
+
+@media (max-width: 980px){ .hd{ grid-template-columns:1fr; } .grid{ grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 560px){
+  .hv{ padding:20px 12px 28px; } .card{ padding:16px 12px; }
+  .hm{ grid-template-columns:minmax(80px,96px) repeat(3,minmax(0,1fr)); gap:4px; }
+  .cell .v{ font-size:16px; } .cell .t:not(.sig){ display:none; } .cell .t.sig{ font-size:9.5px; padding:0 5px; } .tg{ margin-left:0; } .hm .rh span{ display:none; } .hm .ch-h span{ display:none; } .hm .ch-h em{ font-size:10.5px; }
+}
+@media (prefers-reduced-motion: reduce){ .cell, .tip{ transition:none; } }
+
+/* ───────── embed (웹앱 iframe 안) ───────── */
+html.embed, html.embed body{ background:#f3f4f0 !important; color-scheme:light; }
+html.embed[data-theme="dark"], html.embed[data-theme="dark"] body{ background:#0b0c0c !important; color-scheme:dark; }
+html.embed #root{ background:transparent; padding:4px 0 8px; min-height:0; }
+@media (min-width: 900px){ html.embed .wrap{ zoom:.87; } }
+html.embed .tg, html.embed #seg-theme{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="hv" id="root">
+<div class="wrap">
+
+  <header class="hd">
+    <div>
+      <p class="eyebrow">서울특별시 25개 자치구 · 가구 구성 × 투표 성향 · 다중 회귀</p>
+      <h1 id="headline"></h1>
+      <p class="sub" id="subline"></p>
+    </div>
+    <div class="hero" id="hero" aria-live="polite"></div>
+  </header>
+
+  <section class="filters" aria-label="보기 설정">
+    <p class="fnote">가구 유형 <b>6개를 모두 한꺼번에 넣은</b> 다중 회귀 결과입니다. <b>0</b>은 평균적인 가구 구성과 같은 효과, <b>+</b>는 그 유형이 많을수록 투표율·득표율이 평균보다 높아지는 방향, <b>−</b>는 낮아지는 방향입니다.</p>
+    <div class="fg tg"><span class="fl">화면</span>
+      <div class="seg" id="seg-theme" role="group" aria-label="화면 모드">
+        <button data-v="auto" aria-pressed="true">자동</button>
+        <button data-v="light" aria-pressed="false">라이트</button>
+        <button data-v="dark" aria-pressed="false">다크</button>
+      </div></div>
+  </section>
+
+  <main class="grid">
+    <article class="card">
+      <div class="ch"><h2>가구 구성별 다중 회귀 히트맵</h2>
+        <p class="cs">칸 안의 숫자는 표준화 회귀계수 β입니다. 가구 유형 6개를 한꺼번에 넣고 다른 유형을 함께 고려한 값이며, 색이 진할수록 |β|가 큽니다. 칸을 누르면 오른쪽에 자세히 나옵니다.</p></div>
+      <div class="hm" id="hm" role="grid" aria-label="가구 구성과 투표율·득표율의 다중 회귀 표준화 계수"></div>
+      <div class="scale" id="scale"></div>
+    </article>
+
+    <article class="card" id="c-detail">
+      <div class="ch"><h2 id="dt-title"></h2><p class="cs" id="dt-sub"></p></div>
+      <div class="dt-top" id="dt-top"></div>
+      <p class="read" id="dt-read"></p>
+      <div id="sc"></div>
+      <div class="keys" id="sc-keys"></div>
+      <div class="coef" id="coef"></div>
+    </article>
+  </main>
+
+  <details class="tbl" id="tables">
+    <summary>표로 보기 (3개 모형의 회귀계수 · 구별 원자료)</summary>
+    <div class="tbl-wrap" id="t-models"></div>
+    <div class="tbl-wrap" id="t-gu"></div>
+  </details>
+
+  <footer class="foot">
+    <p><b>모형:</b> 결과변수(전체 투표율 / 윤석열 득표율 / 이재명 득표율) 각각에 대해 25개 구를 관측치로, 가구 유형 6개의 비율을 <b>모두</b> 설명변수로 넣은 최소제곱 다중 회귀입니다. 6개 비율은 합이 항상 100%라 절편과 함께 넣으면 계수가 하나로 정해지지 않으므로, 계수를 “25개 구의 평균 가구 구성으로 가중한 합이 0”이 되게 표현했습니다(가중 효과 코딩). 그래서 각 계수 B는 <b>평균적인 가구 구성에서 1%p를 그 유형으로 바꿀 때</b> 결과가 몇 %p 달라지는지이고, 6개 유형이 모두 나옵니다. β는 표준화 계수(= B × 설명변수 표준편차 ÷ 결과변수 표준편차)로 유형끼리 크기를 비교할 수 있으며, 색은 |β| 1.0에서 최대입니다.</p>
+    <p><b>주의:</b> 25개 구에 변수 6개라 자유도가 19뿐이고 가구 유형끼리 겹치는 정보가 있어 개별 계수의 추정은 불안정합니다(95% 신뢰구간 참고). 4세대 이상 가구는 비율이 0.01~0.02%로 극히 작아 “1%p”는 현실적인 단위가 아니므로 해석에 주의하세요. 구 단위 관계이므로 인과나 개인의 선택으로 해석할 수 없습니다.</p>
+    <p><b>자료:</b> 전체 투표율은 「성별·연령대별 투표율(구시군별)」의 구별 합계 투표율(선관위 표본 투표구 기준), 득표율은 서울 득표율 자료의 윤석열·이재명 득표수 ÷ 유효투표수, 가구 유형은 KOSIS 「세대구성별 가구 및 가구원(일반가구) - 시군구」(인구총조사 2022). 출처: 중앙선거관리위원회 · 공공데이터포털 · 국가데이터처 KOSIS</p>
+  </footer>
+</div>
+<div class="tip" id="tip" role="status"></div>
+</div>
+
+<script>
+{ const q0 = new URLSearchParams(location.search); if (q0.get('embed')) document.documentElement.classList.add('embed'); }
+const DATA = {"districts":[{"name":"종로구","hh":[10425.0,21418.0,1985.0,10.0,28424.0,2160.0],"turn":77.5,"lee":46.42433025,"yoon":49.48573959},{"name":"중구","hh":[9453.0,17843.0,1675.0,8.0,25247.0,2034.0],"turn":76.0,"lee":45.42906015,"yoon":50.96692958},{"name":"용산구","hh":[17168.0,33248.0,2799.0,22.0,41437.0,3809.0],"turn":76.9,"lee":39.86076638,"yoon":56.44137986},{"name":"성동구","hh":[21163.0,48098.0,3907.0,23.0,46548.0,3134.0],"turn":78.6,"lee":43.23492353,"yoon":53.20685522},{"name":"광진구","hh":[23597.0,54998.0,4334.0,23.0,69391.0,4120.0],"turn":76.5,"lee":47.19343288,"yoon":48.82963103},{"name":"동대문구","hh":[24143.0,54700.0,4999.0,24.0,68169.0,3877.0],"turn":77.0,"lee":47.10521388,"yoon":49.16019631},{"name":"중랑구","hh":[30026.0,67365.0,5402.0,21.0,64334.0,3396.0],"turn":75.4,"lee":50.4525526,"yoon":45.73934983},{"name":"성북구","hh":[30368.0,75929.0,6347.0,33.0,67222.0,4073.0],"turn":77.3,"lee":49.31659288,"yoon":46.67005346},{"name":"강북구","hh":[21921.0,51214.0,4190.0,15.0,51134.0,2801.0],"turn":74.4,"lee":52.32660006,"yoon":43.82282494},{"name":"도봉구","hh":[24898.0,57520.0,4460.0,26.0,39744.0,2327.0],"turn":77.0,"lee":49.75181527,"yoon":46.59242138},{"name":"노원구","hh":[35738.0,96452.0,6224.0,19.0,63022.0,3623.0],"turn":78.7,"lee":48.94137444,"yoon":47.22542667},{"name":"은평구","hh":[35762.0,83023.0,6795.0,32.0,65769.0,4825.0],"turn":76.1,"lee":51.26976065,"yoon":44.6530379},{"name":"서대문구","hh":[22159.0,51540.0,4379.0,17.0,54288.0,3660.0],"turn":78.4,"lee":48.3326294,"yoon":47.47926586},{"name":"마포구","hh":[26507.0,58782.0,4627.0,20.0,70030.0,5637.0],"turn":79.4,"lee":46.50528093,"yoon":49.0337364},{"name":"양천구","hh":[29604.0,85581.0,5609.0,13.0,45502.0,3035.0],"turn":79.7,"lee":46.39017206,"yoon":50.13724309},{"name":"강서구","hh":[42009.0,97479.0,6871.0,41.0,100695.0,7445.0],"turn":77.6,"lee":49.17489699,"yoon":46.97755554},{"name":"구로구","hh":[31681.0,68920.0,5323.0,25.0,58977.0,4302.0],"turn":78.8,"lee":49.19728545,"yoon":47.0160321},{"name":"금천구","hh":[17559.0,36769.0,2867.0,10.0,50528.0,2956.0],"turn":75.1,"lee":51.56943176,"yoon":44.50923914},{"name":"영등포구","hh":[29033.0,59417.0,4617.0,22.0,73962.0,5053.0],"turn":79.0,"lee":44.60067642,"yoon":51.64950073},{"name":"동작구","hh":[28451.0,63597.0,5004.0,28.0,71782.0,3834.0],"turn":78.0,"lee":45.74259047,"yoon":50.51319648},{"name":"관악구","hh":[34476.0,65709.0,5346.0,27.0,145433.0,9084.0],"turn":76.7,"lee":50.32313299,"yoon":45.16846317},{"name":"서초구","hh":[27328.0,70600.0,5902.0,35.0,46745.0,3861.0],"turn":81.2,"lee":32.18414998,"yoon":65.13038997},{"name":"강남구","hh":[34910.0,89770.0,6493.0,26.0,73579.0,7721.0],"turn":79.0,"lee":30.35739142,"yoon":67.01181457},{"name":"송파구","hh":[47254.0,117845.0,8667.0,49.0,82473.0,7160.0],"turn":80.1,"lee":40.15261062,"yoon":56.76536673},{"name":"강동구","hh":[33460.0,84163.0,6192.0,24.0,59752.0,4024.0],"turn":79.1,"lee":44.80977771,"yoon":51.70678464}],"hhNames":["1세대가구","2세대가구","3세대가구","4세대이상가구","1인가구","비친족가구"],"mr":[{"n":25,"df":19,"r2":0.5014927335155328,"adj":0.37030661075646254,"F":3.822757491175713,"pF":0.01450013075979105,"a":77.74,"coefs":[{"i":0,"b":-0.5543827634215697,"se":0.32646848010611,"t":-1.6981203307632704,"p":0.10580303420529615,"lo":-1.2376891452897767,"hi":0.12892361844663724,"beta":-0.4136153612902281,"cpr":[[16.18236006,69.25885324],[16.80234625,67.93374973],[17.43245027,66.58490822],[17.22347464,68.9574381],[15.08152087,68.3668513],[15.48501719,69.50793419],[17.6060137,67.08863055],[16.50685974,67.8087896],[16.69853361,66.27503511],[19.30451638,66.37326336],[17.42654015,68.10572403],[18.22676167,65.93894853],[16.2882324,69.86099288],[16.00635254,70.3131977],[17.48157596,68.27607998],[16.50388937,67.5293853],[18.72089725,68.86619839],[15.86336492,67.9969856],[16.86945103,70.64350735],[16.47461435,69.68837475],[13.2561761,70.82288134],[17.6913466,69.47400082],[16.4283126,67.34564703],[17.93674653,68.23475419],[17.8343949,68.66880935]]},{"i":1,"b":0.28969772753837775,"se":0.11482453401836402,"t":2.522960184554688,"p":0.02071174257432335,"lo":0.049367215801717323,"hi":0.5300282392750382,"beta":0.9894667690986326,"cpr":[[33.24640651,87.86148314],[31.71525062,86.43651691],[33.76014134,86.0293944],[39.14448251,89.8459032],[35.15080243,86.9108941],[35.08389348,88.25628503],[39.50007036,88.29218169],[41.2720414,88.91632472],[39.01275947,86.83432208],[44.59779027,89.99523299],[47.03186105,91.39172078],[42.31420038,88.30187873],[37.88508045,89.86612988],[35.49573377,89.46987707],[50.53677721,92.60795388],[38.29614206,87.77316242],[40.72612097,91.04300583],[33.21829631,86.41462664],[34.52389253,89.99713344],[36.82598323,89.49002064],[25.26540421,85.49120707],[45.70437169,92.52223105],[42.24490468,88.69147325],[44.73178768,91.13727454],[44.85941956,91.55156239]]},{"i":2,"b":-1.281382780861108,"se":1.444848826612142,"t":-0.8868628726132363,"p":0.38624110929129096,"lo":-4.305486129943933,"hi":1.742720568221717,"beta":-0.2749823501768028,"cpr":[[3.08124554,74.28181975],[2.97724849,73.43368593],[2.84211488,72.6073211],[3.17970588,74.43141521],[2.76998396,73.17837677],[3.20629586,73.98406851],[3.16751102,72.79030699],[3.44998152,72.5391612],[3.191773,71.44253136],[3.4580345,72.64428863],[3.0349428,73.87777406],[3.46319684,71.60587023],[3.21883522,74.76634814],[2.79403151,75.60661979],[3.31219293,73.72337738],[2.69937927,73.21991898],[3.14546056,75.21420214],[2.59013994,73.47240097],[2.68268024,76.55809996],[2.89757725,75.1087114],[2.0555609,75.53791654],[3.82078189,74.3858943],[3.05554379,72.53789917],[3.28983329,73.96304157],[3.30037577,74.3268458]]},{"i":3,"b":113.56995211223422,"se":93.95634356403107,"t":1.2087523609817417,"p":0.24158639886501854,"lo":-83.08293503153361,"hi":310.22283925600203,"beta":0.2689278826064888,"cpr":[[0.01552265,79.99298107],[0.01421969,78.86361087],[0.02233888,78.7861838],[0.01871851,80.63169633],[0.01469996,78.39726038],[0.0153933,79.84077702],[0.01231354,78.24754898],[0.01793751,78.99707052],[0.01142639,76.83010944],[0.02015895,79.36480497],[0.00926477,78.81889672],[0.01630939,77.89580757],[0.01249605,80.31008386],[0.01207708,80.55843659],[0.00767668,78.83940475],[0.01610749,78.50818374],[0.01477297,80.92250652],[0.00903432,77.81738914],[0.01278297,81.44740134],[0.01621346,80.66297907],[0.01038162,79.35091705],[0.02265797,81.85504353],[0.01223535,77.84278867],[0.0185995,80.29092116],[0.01279215,80.00869482]]},{"i":4,"b":-0.08191302533416964,"se":0.05279302854042588,"t":-1.5515879198225069,"p":0.13725870417397734,"lo":-0.1924101039743451,"hi":0.028584053306005816,"beta":-0.32163571464148316,"cpr":[[44.12157338,74.61594317],[44.87557768,73.57278654],[42.07528203,72.80264453],[37.88301742,75.402723],[44.34978238,73.09496167],[43.72274103,74.51109882],[37.7228164,73.75911106],[36.53925597,73.96686711],[38.9518187,72.341753],[30.81527428,74.55118215],[30.73074635,75.2494491],[33.52038164,73.29779516],[39.90503003,75.62216643],[42.28788126,75.72291537],[26.86956727,75.76659682],[39.55959771,73.43841077],[34.85061574,76.39002177],[45.6486191,73.05214519],[42.9751778,76.4754134],[41.56552555,75.41685904],[55.91963857,73.59133011],[30.26134355,76.80298023],[34.62557471,73.61693479],[31.30522912,75.61427127],[31.84819977,75.94710809]]},{"i":5,"b":1.3150494303214528,"se":0.590754243987851,"t":2.2260516004832915,"p":0.03831042101351993,"lo":0.0785865874110887,"hi":2.551512273231817,"beta":0.48352366637884614,"cpr":[[3.35289187,82.63929327],[3.61535727,82.00305439],[3.86767259,81.33533881],[2.55060103,81.860002],[2.63321041,80.19058836],[2.48665914,81.3626405],[1.99127498,79.4677261],[2.21392386,79.87132742],[2.13368882,78.33832058],[1.80422563,79.44800037],[1.76664489,80.08992286],[2.45915008,79.27745494],[2.69032585,82.42881964],[3.40392384,83.66317177],[1.79220994,80.32440903],[2.9248841,80.52522427],[2.54213251,82.58777104],[2.6705454,80.3032609],[2.93601543,83.85664565],[2.22008616,81.74114003],[3.4928386,82.7651323],[2.49949829,82.56874223],[3.63342886,81.23135893],[2.71780389,81.75262376],[2.14481785,81.37643197]]}]},{"n":25,"df":19,"r2":0.6785149204387502,"adj":0.5939135837121055,"F":8.020144204471604,"pF":0.00032926854856678116,"a":50.23569736762114,"coefs":[{"i":0,"b":-2.3422964641718664,"se":0.9196620280091997,"t":-2.546910052644291,"p":0.019687643478041687,"lo":-4.267171210721044,"hi":-0.41742171762268865,"beta":-0.498180208310343,"cpr":[[16.18236006,10.1764863],[16.80234625,11.61027302],[17.43245027,8.64843118],[17.22347464,12.09404624],[15.08152087,14.74629282],[15.48501719,15.34972927],[17.6060137,11.92924769],[16.50685974,6.44647244],[16.69853361,10.14455832],[19.30451638,3.88725252],[17.42654015,8.84492271],[18.22676167,1.2742376],[16.2882324,9.97031293],[16.00635254,8.95615419],[17.48157596,8.15821356],[16.50388937,5.80218323],[18.72089725,5.58207533],[15.86336492,14.86531439],[16.86945103,15.97272016],[16.47461435,16.58451567],[13.2561761,18.36060928],[17.6913466,14.42281374],[16.4283126,17.09896449],[17.93674653,7.79307731],[17.8343949,10.28966365]]},{"i":1,"b":0.6543616335009029,"se":0.32346082472101917,"t":2.023001190531439,"p":0.05737444731258122,"lo":-0.0226496532989382,"hi":1.331372920300744,"beta":0.6371352286909011,"cpr":[[33.24640651,69.83554393],[31.71525062,71.71959244],[33.76014134,71.57173905],[39.14448251,78.05117753],[35.15080243,73.07302233],[35.08389348,74.57778413],[39.50007036,79.01508188],[41.2720414,72.11727207],[39.01275947,74.78592758],[44.59779027,78.28723586],[47.03186105,80.43889149],[42.31420038,71.65550629],[37.88508045,72.91272521],[35.49573377,69.67482349],[50.53677721,82.17457521],[38.29614206,69.51871102],[40.72612097,76.08157782],[33.21829631,73.75879659],[34.52389253,78.07708637],[36.82598323,79.27045715],[25.26540421,65.94321487],[45.70437169,85.76837964],[42.24490468,83.22238785],[44.73178768,79.07702094],[44.85941956,81.41738684]]},{"i":2,"b":0.7519437691303488,"se":4.070140558797444,"t":0.18474638855040343,"p":0.855385669037168,"lo":-7.766958325255556,"hi":9.270845863516254,"beta":0.046001179463078176,"cpr":[[3.08124554,50.39729444],[2.97724849,53.20507268],[2.84211488,51.61750839],[3.17970588,54.82749003],[2.76998396,52.15455801],[3.20629586,54.03118447],[3.16751102,55.54954149],[3.44998152,47.70462375],[3.191773,51.65750838],[3.4580345,51.70440047],[3.0349428,51.9451524],[3.46319684,46.57084629],[3.21883522,50.54256517],[2.79403151,48.54873174],[3.31219293,51.59582996],[2.69937927,46.48896637],[3.14546056,51.79717624],[2.59013994,53.96965755],[2.68268024,57.50320035],[2.89757725,57.35176177],[2.0555609,50.9561699],[3.82078189,58.73420546],[3.05554379,57.87654013],[3.28983329,52.28002493],[3.30037577,54.54480077]]},{"i":3,"b":489.8321791095108,"se":264.6751117851906,"t":1.8506922536300159,"p":0.07982536533062273,"lo":-64.13919646009981,"hi":1043.8035546791214,"beta":0.33065673152376523,"cpr":[[0.01552265,55.68386333],[0.01421969,57.93161307],[0.02233888,60.42270048],[0.01871851,61.60546062],[0.01469996,57.27219977],[0.0153933,59.16036337],[0.01231354,59.1993184],[0.01793751,53.89680234],[0.01142639,54.85449051],[0.02015895,58.97865319],[0.00926477,54.20122735],[0.01630939,51.95558061],[0.01249605,54.24314901],[0.01207708,52.36351756],[0.00767668,52.86553289],[0.01610749,52.3491509],[0.01477297,56.66824237],[0.00903432,56.44731929],[0.01278297,61.74748495],[0.01621346,63.11482194],[0.01038162,54.49575558],[0.02265797,66.95979741],[0.01223535,61.57221199],[0.0185995,58.9168869],[0.01279215,58.32911252]]},{"i":4,"b":-0.4326897599191185,"se":0.14871801307267138,"t":-2.9094643680297403,"p":0.008989706012116532,"lo":-0.7439601386040282,"hi":-0.12141938123420881,"beta":-0.4843346993777406,"cpr":[[44.12157338,28.98941807],[44.87557768,31.5491463],[42.07528203,31.27485413],[37.88301742,36.04493629],[44.34978238,30.88198914],[43.72274103,32.70184796],[37.7228164,36.84547495],[36.53925597,29.30026975],[38.9518187,32.40342148],[30.81527428,35.77069934],[30.73074635,36.36616681],[33.52038164,29.46279112],[39.90503003,30.85568422],[42.28788126,28.15024397],[26.86956727,37.47906051],[39.55959771,27.34215211],[34.85061574,34.35246221],[45.6486191,32.27032792],[42.9751778,36.8910563],[41.56552555,37.18796934],[55.91963857,25.21464871],[30.26134355,42.76741884],[34.62557471,40.5968114],[31.30522912,36.26080322],[31.84819977,38.28271386]]},{"i":5,"b":7.970617245567194,"se":1.6641552835493494,"t":4.789587440762904,"p":0.000127416710790152,"lo":4.487500206827734,"hi":11.453734284306654,"beta":0.8354592642128996,"cpr":[[3.35289187,74.80498881],[3.61535727,79.78297824],[3.86767259,80.30813568],[2.55060103,72.76639454],[2.63321041,71.05999812],[2.48665914,71.44043851],[1.99127498,69.039442],[2.21392386,62.75677132],[2.13368882,66.26429147],[1.80422563,63.48494486],[1.76664489,63.74429627],[2.45915008,63.56766102],[2.69032585,69.56573972],[3.40392384,73.57915123],[1.79220994,63.39026658],[2.9248841,67.77231663],[2.54213251,69.69433198],[2.6705454,73.30791319],[2.93601543,78.8878309],[2.22008616,72.86840367],[3.4928386,77.25058331],[2.49949829,75.78373648],[3.63342886,84.53961377],[2.71780389,71.46882987],[2.14481785,69.15862588]]}]},{"n":25,"df":19,"r2":0.6894621849960243,"adj":0.607741707363399,"F":8.436834988844593,"pF":0.00024189293330006273,"a":46.02585796739098,"coefs":[{"i":0,"b":2.2606268834124656,"se":0.8474442899576667,"t":2.667581704427312,"p":0.015215316406754668,"lo":0.48690559976010417,"hi":4.034348167064827,"beta":0.5128229210401306,"cpr":[[16.18236006,84.50636061],[16.80234625,83.59005935],[17.43245027,86.02137998],[17.22347464,82.87297299],[15.08152087,80.26594497],[15.48501719,79.88888574],[17.6060137,83.10435933],[16.50685974,88.05490227],[16.69853361,84.88035795],[19.30451638,90.7321419],[17.42654015,85.8049539],[18.22676167,92.97614082],[16.2882324,84.58145321],[16.00635254,85.29428913],[17.48157596,86.60375011],[16.50388937,88.93433666],[18.72089725,89.09065956],[15.86336492,80.44871495],[16.86945103,79.19067881],[16.47461435,78.59389493],[13.2561761,76.74369637],[17.6913466,80.79955918],[16.4283126,78.37734536],[17.93674653,87.16146428],[17.8343949,84.60202567]]},{"i":1,"b":-0.6196504915427653,"se":0.29806061421085805,"t":-2.0789412018872233,"p":0.051410423219230075,"lo":-1.2434985267578047,"hi":0.0041975436722739845,"beta":-0.6435088479515741,"cpr":[[33.24640651,27.32293028],[31.71525062,25.95385308],[33.76014134,25.69362608],[39.14448251,19.68122535],[35.15080243,24.39104144],[35.08389348,23.14328775],[39.50007036,18.82749344],[41.2720414,25.16481064],[39.01275947,22.95692837],[44.59779027,19.45679054],[47.03186105,17.26673294],[42.31420038,25.55221833],[37.88508045,24.28432844],[35.49573377,27.11494939],[50.53677721,15.76929068],[38.29614206,27.89497742],[40.72612097,21.53373507],[33.21829631,24.0038321],[34.52389253,19.66239733],[36.82598323,18.53170022],[25.26540421,31.12070816],[45.70437169,12.48528908],[42.24490468,15.06198429],[44.73178768,18.89509865],[44.85941956,16.48795172]]},{"i":2,"b":-0.689133464635166,"se":3.7505271184725886,"t":-0.1837430960680048,"p":0.856161743659066,"lo":-8.539076940308956,"hi":7.160810011038623,"beta":-0.04496564993830346,"cpr":[[3.08124554,45.800693],[2.97724849,43.55450215],[2.84211488,44.65451778],[3.17970588,41.74588145],[2.76998396,44.2633648],[3.20629586,42.67347382],[3.16751102,41.12089361],[3.44998152,48.36155366],[3.191773,44.93164637],[3.4580345,44.70878591],[3.0349428,44.31856811],[3.46319684,49.38562856],[3.21883522,45.5416301],[2.79403151,47.18443765],[3.31219293,44.80188653],[2.69937927,49.76496808],[3.14546056,44.60205382],[2.59013994,42.80261363],[2.68268024,39.20641957],[2.89757725,39.35412138],[2.0555609,45.3598725],[3.82078189,38.1729968],[3.05554379,39.13338276],[3.28983329,44.34603866],[3.30037577,42.01071371]]},{"i":3,"b":-466.2808155955612,"se":243.89113102973863,"t":-1.911839982154602,"p":0.0710973748356765,"lo":-976.7508194976515,"hi":44.189188306529104,"beta":-0.3357156109969659,"cpr":[[0.01552265,40.68616965],[0.01421969,38.97585307],[0.02233888,36.19692269],[0.01871851,35.20903909],[0.01469996,39.31794363],[0.0153933,37.70543968],[0.01231354,37.56216499],[0.01793751,42.37513355],[0.01142639,41.80329519],[0.02015895,37.69210364],[0.00926477,42.09006539],[0.01630939,44.16747814],[0.01249605,41.93316923],[0.01207708,43.47858947],[0.00767668,43.50494008],[0.01610749,44.11458802],[0.01477297,39.88134391],[0.00903432,40.37503499],[0.01278297,35.09469135],[0.01621346,33.79091264],[0.01038162,41.93567774],[0.02265797,30.24104657],[0.01223535,35.53395047],[0.0185995,37.94058475],[0.01279215,38.32037703]]},{"i":4,"b":0.39682167970702104,"se":0.13703972454435648,"t":2.895668982307239,"p":0.009266440408646461,"lo":0.10999423982619494,"hi":0.6836491195878471,"beta":0.47375989238873445,"cpr":[[44.12157338,65.43247927],[44.87557768,63.41382583],[42.07528203,63.30949835],[37.88301742,58.96992579],[44.34978238,63.77120858],[43.72274103,62.23317113],[37.7228164,58.27296283],[36.53925597,65.23862031],[38.9518187,62.58813008],[30.81527428,59.3200021],[30.73074635,58.60467514],[33.52038164,65.07384755],[39.90503003,63.59501821],[42.28788126,65.89064634],[26.86956727,57.74685634],[39.55959771,67.32330668],[34.85061574,60.59917583],[45.6486191,62.70192745],[42.9751778,58.10862654],[41.56552555,57.8450405],[55.91963857,68.96655321],[30.26134355,52.81438264],[34.62557471,54.97923896],[31.30522912,59.03576647],[31.84819977,56.92316923]]},{"i":5,"b":-7.643542919600195,"se":1.5334751785931846,"t":-4.984458194238532,"p":8.230798088298966e-05,"lo":-10.853143355233799,"hi":-4.433942483966591,"beta":-0.8545194775146716,"cpr":[[3.35289187,22.2961095],[3.61535727,17.97208526],[3.86767259,17.05039279],[2.55060103,24.44149476],[2.63321041,26.04519668],[2.48665914,25.87615372],[1.99127498,28.08333569],[2.21392386,33.81682935],[2.13368882,30.82226187],[1.80422563,33.3011572],[1.76664489,32.90662275],[2.45915008,32.97561424],[2.69032585,27.19621604],[3.40392384,23.09186029],[1.79220994,33.38559592],[2.9248841,29.26872349],[2.54213251,27.33879702],[2.6705454,24.17513734],[2.93601543,18.61358433],[2.22008616,24.38161496],[3.4928386,20.07876652],[2.49949829,21.70100303],[3.63342886,13.46679078],[2.71780389,25.83952217],[2.14481785,27.89110585]]}]}]};
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const S = (tag, a = {}, p) => { const n = document.createElementNS(SVGNS, tag); for (const k in a) n.setAttribute(k, a[k]); if (p) p.appendChild(n); return n; };
+const H = (tag, a = {}, p) => { const n = document.createElement(tag); for (const k in a) { if (k === 'text') n.textContent = a[k]; else if (k === 'class') n.className = a[k]; else n.setAttribute(k, a[k]); } if (p) p.appendChild(n); return n; };
+const fr = v => Math.abs(v) < 0.005 ? '0.00' : (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+const f1 = v => v.toFixed(1);
+const fp = p => p < 0.001 ? '<0.001' : p.toFixed(3);
+const SAT = 1.0;
+const pTxt = p => p < 0.001 ? 'p<0.001' : 'p=' + p.toFixed(3);
+const hasBatchim = w => { const c = w.charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0; };
+const pick = (w, a, b) => w + (hasBatchim(w) ? a : b);
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+
+/* ───────── 색 (OKLCH) : 중립(회색) → 양(+)은 빨강, 음(−)은 파랑. 진할수록 |β| 큼 ───────── */
+function oklch2hex(L, C, h) {
+  const g = c => c <= .0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - .055;
+  for (let k = 0; k < 60; k++) {
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    const l = (L + .3963377774 * a + .2158037573 * b) ** 3, m = (L - .1055613458 * a - .0638541728 * b) ** 3, s = (L - .0894841775 * a - 1.291485548 * b) ** 3;
+    const rgb = [4.0767416621 * l - 3.3077115913 * m + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s, -.0041960863 * l - .7034186147 * m + 1.707614701 * s];
+    if (rgb.every(v => v >= -1e-4 && v <= 1 + 1e-4) || k === 59) return '#' + rgb.map(v => Math.round(g(Math.min(1, Math.max(0, v))) * 255).toString(16).padStart(2, '0')).join('');
+    C *= .95;
+  }
+}
+function colorOf(r) {
+  const t = Math.min(1, Math.abs(r) / SAT), h = r >= 0 ? 27 : 258, dark = isDark();
+  const L = dark ? .33 + .27 * t : .955 - .60 * t;
+  const C = (r >= 0 ? .215 : .19) * Math.min(1, t * 1.35);
+  return oklch2hex(L, C, h);
+}
+const lum = hex => { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+const contrast = (a, b) => (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+const textOn = hex => { const L = lum(hex); return contrast(L, 1) >= contrast(L, 0) ? '#ffffff' : '#000000'; };
+
+/* ───────── 데이터 ───────── */
+const G = DATA.districts, MR = DATA.mr;               // MR[결과변수] = 6개 가구 유형을 모두 넣은 다중 회귀 모형 (viz/build_heatmap.py → viz/mreg.py)
+const ROWS = [
+  { label: '1세대 가구', short: '1세대', desc: '부부 등 한 세대 (1인 제외)' },
+  { label: '2세대 가구', short: '2세대', desc: '부모와 자녀' },
+  { label: '3세대 가구', short: '3세대', desc: '조부모·부모·자녀' },
+  { label: '4세대 이상 가구', short: '4세대 이상', desc: '비율 0.01~0.02%로 극히 작음' },
+  { label: '1인 가구', short: '1인', desc: '혼자 사는 가구' },
+  { label: '비친족 가구', short: '비친족', desc: '가족이 아닌 사람끼리' },
+];
+const COLS = [
+  { key: 'turn', label: '전체 투표율', sub: '서울 25개 구 투표율', css: 'var(--turn)' },
+  { key: 'yoon', label: '보수 득표율', sub: '윤석열', css: 'var(--yoon)' },
+  { key: 'lee', label: '진보 득표율', sub: '이재명', css: 'var(--lee)' },
+];
+const state = { sel: null, pin: null };
+{ const q = new URLSearchParams(location.search); if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme'); }
+const total = d => d.hh.reduce((a, b) => a + b, 0);
+const shareOf = (d, i) => d.hh[i] / total(d) * 100;
+const model = c => MR[c];
+const coefOf = (i, c) => model(c).coefs.find(k => k.i === i);
+const rowN = i => ROWS[i].label + ' 비율';
+
+function sentence(i, c) {
+  const k = coefOf(i, c), sig = k.p < 0.05;
+  const dir = k.b > 0 ? '높아' : '낮아';
+  const tiny = i === 3 ? ' (이 유형은 비율 변동폭이 0.015%p뿐이라 1%p 단위는 현실적이지 않습니다)' : '';
+  return [`평균적인 가구 구성에서 1%p를 ‘${ROWS[i].label}’로 바꾸면, 다른 유형을 함께 고려했을 때 ${COLS[c].label}이 ${Math.abs(k.b).toFixed(2)}%p ${dir}지는 경향${tiny}`,
+    sig ? `p=${fp(k.p)}로 5% 수준에서 유의합니다.` : `p=${fp(k.p)}로 유의하지 않습니다(우연과 구분하기 어려움).`];
+}
+
+/* ───────── 툴팁 ───────── */
+const tip = $('#tip');
+function showTip(build, ev) { tip.replaceChildren(); build(tip); tip.classList.add('on'); moveTip(ev); }
+function moveTip(ev) { const r = tip.getBoundingClientRect(); let x = ev.clientX + 16, y = ev.clientY + 14; if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 16; if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14; tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px'; }
+const hideTip = () => tip.classList.remove('on');
+const tipRow = (p, l, v) => { const r = H('div', { class: 'row' }, p); H('span', { class: 'l', text: l }, r); H('span', { class: 'v', text: v }, r); };
+
+/* ───────── 히트맵 ───────── */
+function renderHeatmap() {
+  const hm = $('#hm'); hm.replaceChildren();
+  H('div', {}, hm);
+  COLS.forEach((c, j) => {
+    const mo = model(j), h = H('div', { class: 'ch-h', 'data-c': j }, hm);
+    const b = H('b', {}, h); const i = H('i', {}, b); i.style.setProperty('--k', c.css); b.append(c.label);
+    H('span', { text: c.sub }, h);
+    const g = H('div', { class: 'gauge', role: 'img', 'aria-label': `설명력 R² ${mo.r2.toFixed(2)}` }, h); const gi = H('i', {}, g); gi.style.width = (mo.r2 * 100).toFixed(1) + '%'; gi.style.background = c.css;
+    H('em', { text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)}` }, h);
+    H('em', { text: `F검정 ${pTxt(mo.pF)}` }, h);
+  });
+  ROWS.forEach((r, i) => {
+    const rh = H('div', { class: 'rh', 'data-r': i }, hm); H('b', { text: rowN(i) }, rh); H('span', { text: r.desc }, rh);
+    COLS.forEach((c, j) => {
+      const k = coefOf(i, j), bg = colorOf(k.beta);
+      const b = H('button', { class: 'cell', type: 'button', 'data-r': i, 'data-c': j, 'aria-pressed': String(!!state.sel && state.sel[0] === i && state.sel[1] === j), 'aria-label': `${r.label} → ${c.label} 표준화 계수 ${fr(k.beta)}` }, hm);
+      b.style.backgroundColor = bg; b.style.color = textOn(bg);
+      H('span', { class: 'v n', text: fr(k.beta) }, b); H('span', { class: 't n' + (k.p < 0.05 ? ' sig' : ''), text: (k.p < 0.05 ? '유의 · ' : '') + pTxt(k.p) }, b);
+      b.addEventListener('click', () => { state.sel = [i, j]; state.pin = null; renderAll(); });
+      b.addEventListener('pointerenter', e => { mark(i, j, true); showTip(p => { H('div', { class: 'tt', text: `${rowN(i)} → ${c.label}` }, p); tipRow(p, '표준화 계수 β', fr(k.beta)); tipRow(p, '평균 대비 효과 B', `${fr(k.b)}%p / 1%p`); tipRow(p, '95% 신뢰구간', `[${fr(k.lo)}, ${fr(k.hi)}]`); tipRow(p, 'p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')); }, e); });
+      b.addEventListener('pointermove', moveTip);
+      b.addEventListener('pointerleave', () => { mark(i, j, false); hideTip(); });
+      b.addEventListener('focus', () => mark(i, j, true)); b.addEventListener('blur', () => mark(i, j, false));
+    });
+  });
+  const sc = $('#scale'); sc.replaceChildren();
+  const stops = Array.from({ length: 15 }, (_, k) => colorOf(-SAT + 2 * SAT * k / 14));
+  H('span', { text: '음(−) 효과' }, sc);
+  const bar = H('div', { class: 'bar' }, sc); bar.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+  H('span', { text: '양(+) 효과' }, sc);
+  const lab = H('div', { class: 'lab' }, sc); ['−1.0', '−0.5', '0', '+0.5', '+1.0'].forEach(t => H('span', { text: t }, lab));
+  H('small', { text: '색이 진할수록(다크 모드에서는 밝고 선명할수록) |β|가 큽니다 (|β| 1.0 이상은 같은 진하기). 빨간색 = 그 유형이 많을수록 평균보다 결과가 높아지는 효과, 파란색 = 낮아지는 효과, 회색에 가까울수록 평균과 차이 없음. “유의”는 p < 0.05.' }, sc);
+}
+function mark(i, j, on) {
+  document.querySelectorAll('.hm .rh').forEach(n => n.classList.toggle('on', on && +n.dataset.r === i));
+  document.querySelectorAll('.hm .ch-h').forEach(n => n.classList.toggle('on', on && +n.dataset.c === j));
+}
+
+/* ───────── 상세: 부분 회귀 산점도 + 계수표 ───────── */
+function niceTicks(lo, hi, n = 5) {
+  const raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, step = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10)); return out;
+}
+const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+function renderDetail() {
+  const [i, j] = state.sel, k = coefOf(i, j), col = COLS[j], mo = model(j);
+  $('#dt-title').textContent = `${rowN(i)} → ${col.label}`;
+  $('#dt-sub').textContent = `점 하나가 구 하나(25개 구) · 가로축은 이 유형의 실제 비율, 세로축은 ${col.label}에서 다른 가구 유형의 영향을 뺀 값입니다`;
+  const top = $('#dt-top'); top.replaceChildren();
+  const big = H('div', { class: 'big n', text: fr(k.beta) }, top); big.style.color = col.css === 'var(--turn)' ? 'var(--ink)' : col.css;
+  const sx = H('div', { class: 'st' }, top);
+  [['표준화 계수 β', fr(k.beta)], ['평균 대비 효과 B (1%p당)', `${fr(k.b)}%p`], ['95% 신뢰구간', `[${fr(k.lo)}, ${fr(k.hi)}]`], ['p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')]]
+    .forEach(([a, b]) => { const d = H('div', {}, sx); H('b', { class: 'n', text: b }, d); d.append(a); });
+  const [s1, s2] = sentence(i, j); const rd = $('#dt-read'); rd.replaceChildren(); H('b', { text: s1 + '. ' }, rd); rd.append(s2);
+
+  const host = $('#sc'); host.replaceChildren();
+  const W = Math.max(300, host.clientWidth || 560), Hh = 340, m = { l: 50, r: 22, t: 30, b: 48 };
+  const svg = S('svg', { width: W, height: Hh, viewBox: `0 0 ${W} ${Hh}`, role: 'img', 'aria-label': `${rowN(i)}와 ${col.label}의 부분잔차 산점도` }, host);
+  const xs = k.cpr.map(a => a[0]), ys = k.cpr.map(a => a[1]);
+  const pad = (a, b) => [a - (b - a) * .1, b + (b - a) * .1];
+  const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
+  const X = v => m.l + (W - m.l - m.r) * (v - x0) / (x1 - x0), Y = v => m.t + (Hh - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+  const fx = v => (i === 3 ? v.toFixed(3) : v.toFixed(0)) + '%', fy = v => v.toFixed(0) + '%';
+  niceTicks(y0, y1).forEach(v => { S('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)' }, svg); const t = S('text', { x: m.l - 8, y: Y(v), class: 'tick', 'text-anchor': 'end', 'dominant-baseline': 'central' }, svg); t.textContent = fy(v); });
+  niceTicks(x0, x1).forEach(v => { const t = S('text', { x: X(v), y: Hh - m.b + 18, class: 'tick', 'text-anchor': 'middle' }, svg); t.textContent = fx(v); });
+  S('line', { x1: m.l, x2: W - m.r, y1: Hh - m.b, y2: Hh - m.b, stroke: 'var(--axis)' }, svg);
+  const xt = S('text', { x: m.l + (W - m.l - m.r) / 2, y: Hh - 6, class: 'xl', 'text-anchor': 'middle' }, svg); xt.textContent = `${rowN(i)} (전체 일반가구 중 %)`;
+  const yt = S('text', { x: 0, y: 12, class: 'tick' }, svg); yt.textContent = `${col.label} (다른 가구 유형의 영향을 뺀 값, %)`;
+  // 회귀선: 부분잔차 = a* + b*·x 이므로 기울기가 이 유형의 계수 B
+  S('line', { x1: X(x0), y1: Y(mo.a + k.b * x0), x2: X(x1), y2: Y(mo.a + k.b * x1), stroke: 'var(--ink2)', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg);
+  const pc = col.css === 'var(--turn)' ? 'var(--ink2)' : col.css;
+  const res = ys.map((y, n) => y - (mo.a + k.b * xs[n])), sdr = Math.sqrt(res.reduce((a, b) => a + b * b, 0) / (res.length - 6));
+  const labeled = new Set(); res.forEach((e, n) => { if (Math.abs(e) > 1.5 * sdr) labeled.add(n); });
+  labeled.add(xs.indexOf(Math.min(...xs))); labeled.add(xs.indexOf(Math.max(...xs)));
+  if (state.pin !== null) labeled.add(state.pin);
+  const dots = [];
+  G.forEach((d, n) => {
+    const on = state.pin === n;
+    dots.push(S('circle', { cx: X(xs[n]), cy: Y(ys[n]), r: on ? 6.5 : 5, fill: pc, stroke: on ? 'var(--ink)' : 'var(--surface)', 'stroke-width': on ? 2.5 : 2, 'fill-opacity': .92 }, svg));
+    if (labeled.has(n)) { const t = S('text', { x: X(xs[n]) + 9, y: Y(ys[n]) - 7, class: 'lbl' }, svg); t.textContent = d.name; }
+  });
+  const hit = S('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: Hh - m.t - m.b, fill: 'transparent', style: 'cursor:pointer' }, svg);
+  const near = e => { const b = svg.getBoundingClientRect(), sx = W / b.width, px = (e.clientX - b.left) * sx, py = (e.clientY - b.top) * sx; let best = -1, bd = 1e9; G.forEach((_, n) => { const dd = Math.hypot(X(xs[n]) - px, Y(ys[n]) - py); if (dd < bd) { bd = dd; best = n; } }); return bd < 36 ? best : -1; };
+  let last = -1;
+  const over = e => {
+    const n = near(e); if (last >= 0 && last !== n) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5);
+    last = n; if (n < 0) { hideTip(); return; }
+    dots[n].setAttribute('r', 7.5);
+    showTip(p => { H('div', { class: 'tt', text: G[n].name }, p); tipRow(p, rowN(i), (i === 3 ? shareOf(G[n], i).toFixed(3) : f1(shareOf(G[n], i))) + '%'); tipRow(p, col.label + ' (실제)', f1(G[n][col.key]) + '%'); tipRow(p, '다른 유형 영향을 뺀 값', f1(ys[n]) + '%'); tipRow(p, '회귀선과의 차이', (res[n] >= 0 ? '+' : '−') + Math.abs(res[n]).toFixed(1) + '%p'); }, e);
+  };
+  hit.addEventListener('pointermove', over); hit.addEventListener('pointerenter', over);
+  hit.addEventListener('pointerleave', () => { if (last >= 0) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5); last = -1; hideTip(); });
+  hit.addEventListener('click', e => { const n = near(e); state.pin = n < 0 || n === state.pin ? null : n; renderDetail(); });
+  const ky = $('#sc-keys'); ky.replaceChildren();
+  let sp = H('span', {}, ky); const d = H('span', { class: 'dot' }, sp); d.style.setProperty('--k', pc); sp.append('구 (점을 누르면 이름 고정)');
+  sp = H('span', {}, ky); H('span', { class: 'ln' }, sp); sp.append(`회귀선 (기울기 = B ${fr(k.b)})`);
+
+  // 계수표 (선택한 결과변수의 전체 모형: 6개 유형 모두)
+  const cf = $('#coef'); cf.replaceChildren();
+  H('p', { class: 'sec', text: `${col.label} 다중 회귀 모형 (n=${mo.n}, 잔차 자유도 ${mo.df})` }, cf);
+  H('p', { class: 'fit', text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)} · F=${mo.F.toFixed(2)} (p=${fp(mo.pF)}) → ${mo.pF < 0.05 ? '모형 전체가 유의합니다' : '모형 전체가 유의하지 않습니다'}` }, cf);
+  const wrap = H('div', { class: 'coef-wrap' }, cf), t = H('table', {}, wrap), h = H('tr', {}, H('thead', {}, t));
+  ['가구 유형 비율', 'B (평균 대비)', 'β', '95% 신뢰구간', 'p'].forEach(x => H('th', { text: x }, h));
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const c = coefOf(n, j), tr = H('tr', {}, tb); if (n === i) tr.className = 'on';
+    [r.label, fr(c.b), fr(c.beta), `[${fr(c.lo)}, ${fr(c.hi)}]`, fp(c.p) + (c.p < 0.05 ? ' *' : '')].forEach(x => H('td', { text: x }, tr));
+  });
+}
+
+/* ───────── 헤더 / 표 ───────── */
+function bestCell() {
+  let best = null;
+  ROWS.forEach((_, i) => COLS.forEach((_, j) => { const k = coefOf(i, j); const score = Math.abs(k.beta) + (k.p < 0.05 ? 10 : 0); if (!best || score > best.s) best = { i, j, s: score }; }));
+  return [best.i, best.j];
+}
+function renderHeader() {
+  const [bi, bj] = bestCell(), k = coefOf(bi, bj);
+  $('#headline').textContent = `${pick(rowN(bi), '은', '는')} 다른 가구 유형을 함께 고려해도 ${pick(COLS[bj].label, '과', '와')} 가장 뚜렷하게 연결된다`;
+  const fitTxt = COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)}`).join(' · ');
+  $('#subline').textContent = `가구 유형 6개를 모두 한꺼번에 넣은 다중 회귀(25개 구)입니다 — ${fitTxt}. 각 값은 “평균적인 가구 구성에서 1%p를 그 유형으로 바꿀 때”의 효과를, 유형끼리 크기를 비교할 수 있게 표준화한 계수 β입니다.`;
+  const hero = $('#hero'); hero.replaceChildren();
+  H('div', { class: 'num n', text: fr(k.beta) }, hero); H('div', { class: 'cap', text: `β · ${rowN(bi)} → ${COLS[bj].label}${k.p < 0.05 ? ' (p<0.05)' : ''}` }, hero);
+  return [bi, bj];
+}
+function renderTables() {
+  const a = $('#t-models'); a.replaceChildren();
+  const t = H('table', {}, a), h = H('tr', {}, H('thead', {}, t));
+  H('th', { text: '가구 유형 비율' }, h); COLS.forEach(c => ['B', 'β', 'p'].forEach(x => H('th', { text: `${c.label.replace(' 득표율', '')} ${x}` }, h)));
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const tr = H('tr', {}, tb); H('td', { text: r.label }, tr);
+    COLS.forEach((_, j) => { const c = coefOf(n, j); [fr(c.b), fr(c.beta), fp(c.p) + (c.p < 0.05 ? ' *' : '')].forEach(x => H('td', { text: x }, tr)); });
+  });
+  H('caption', { text: `${COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)} (수정 ${model(j).adj.toFixed(2)}, F p=${fp(model(j).pF)})`).join(' · ')} · B = 평균적인 가구 구성에서 1%p를 그 유형으로 바꿀 때의 효과 · * p<0.05` }, t);
+  const g = $('#t-gu'); g.replaceChildren();
+  const t2 = H('table', {}, g), h2 = H('tr', {}, H('thead', {}, t2));
+  ['자치구', ...ROWS.map(r => r.label + ' %'), '전체 투표율', '윤석열 %', '이재명 %'].forEach(x => H('th', { text: x }, h2));
+  const tb2 = H('tbody', {}, t2);
+  G.forEach(d => { const tr = H('tr', {}, tb2); [d.name, ...ROWS.map((_, i) => shareOf(d, i).toFixed(i === 3 ? 3 : 1)), f1(d.turn), f1(d.yoon), f1(d.lee)].forEach(x => H('td', { text: x }, tr)); });
+}
+function renderAll() {
+  const th = document.documentElement.dataset.theme || 'auto';
+  document.querySelectorAll('#seg-theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === th)));
+  const best = renderHeader(); if (!state.sel) state.sel = best;
+  renderHeatmap(); renderDetail(); renderTables();
+}
+$('#seg-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = b.dataset.v; });
+renderAll();
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(renderDetail, 80); }).observe($('#c-detail'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>인구지표와 투표 다중 회귀 히트맵</title>
+<style>
+/* ───────── tokens ───────── */
+.hv {
+  color-scheme: light;
+  --plane:#f1efe8; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10); --wash:rgba(11,11,11,.045);
+  --lee:#1766e0; --yoon:#e22d2b; --turn:#52514e; --cellb:rgba(11,11,11,.10); --refline:rgba(11,11,11,.13);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])) .hv{
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+    --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+  }
+}
+:root[data-theme="dark"] .hv{
+  color-scheme: dark;
+  --plane:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10); --wash:rgba(255,255,255,.05);
+  --lee:#4a92f5; --yoon:#f45a56; --turn:#c3c2b7; --cellb:rgba(255,255,255,.14); --refline:rgba(255,255,255,.16);
+}
+
+/* ───────── base ───────── */
+html,body{ margin:0; background:#f1efe8; }
+.hv, .hv *{ box-sizing:border-box; }
+.hv{
+  background:var(--plane); color:var(--ink);
+  font:14px/1.5 "Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+  padding:32px clamp(12px,3vw,40px) 40px; min-height:100vh; overflow-x:hidden; -webkit-font-smoothing:antialiased;
+}
+.hv .wrap{ max-width:1320px; margin:0 auto; min-width:0; }
+.hv h1,.hv h2,.hv p{ margin:0; }
+.hv button{ font:inherit; color:inherit; cursor:pointer; }
+.hv svg{ display:block; overflow:visible; }
+.hv svg text{ font-family:inherit; }
+.hv button:focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+.n{ font-feature-settings:"tnum"; }
+
+/* ───────── masthead ───────── */
+.hd{ display:grid; grid-template-columns:minmax(0,1fr) auto; gap:24px 48px; align-items:end; padding-bottom:22px; border-bottom:2px solid var(--ink); }
+.eyebrow{ font-size:12px; letter-spacing:.06em; color:var(--ink2); font-weight:600; display:flex; gap:10px; align-items:center; }
+.eyebrow::before{ content:""; width:18px; height:8px; background:linear-gradient(90deg,var(--lee) 50%,var(--yoon) 50%); display:inline-block; }
+#headline{ word-break:keep-all; font-size:clamp(22px,3vw,36px); line-height:1.22; letter-spacing:-.025em; font-weight:800; margin-top:10px; }
+.sub{ color:var(--ink2); margin-top:10px; max-width:70ch; }
+.hero .num{ font-size:clamp(44px,5.4vw,68px); line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.hero .cap{ font-size:12px; color:var(--ink2); margin-top:8px; font-weight:500; max-width:26ch; }
+
+/* ───────── filters ───────── */
+.filters{ display:flex; flex-wrap:wrap; gap:14px 36px; padding:16px 0 18px; align-items:flex-end; }
+.fg{ display:flex; flex-direction:column; gap:6px; min-width:0; max-width:100%; }
+.fl{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); }
+.seg{ display:inline-flex; flex-wrap:wrap; max-width:100%; border:1px solid var(--axis); border-radius:6px; background:var(--surface); padding:2px; gap:2px; }
+.seg button{ border:0; background:transparent; padding:6px 13px; border-radius:4px; font-weight:600; color:var(--ink2); white-space:nowrap; }
+.seg button:hover{ background:var(--wash); }
+.seg button[aria-pressed="true"]{ background:var(--ink); color:var(--surface); }
+.fnote{ font-size:13px; color:var(--ink2); max-width:70ch; align-self:flex-end; }
+.fnote b{ color:var(--ink); }
+
+/* ───────── layout ───────── */
+.grid{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+.card{ background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:20px 22px 20px; min-width:0; }
+.ch{ margin-bottom:16px; }
+.ch h2{ font-size:16px; font-weight:800; letter-spacing:-.01em; }
+.cs{ color:var(--ink2); font-size:12.5px; margin-top:4px; }
+
+/* ───────── heatmap ───────── */
+.hm{ display:grid; grid-template-columns:minmax(104px,150px) repeat(3,minmax(0,1fr)); gap:6px; }
+.hm .ch-h{ padding:0 4px 8px; display:flex; flex-direction:column; justify-content:flex-end; gap:2px; border-bottom:1px solid var(--grid); }
+.hm .ch-h b{ font-size:13.5px; font-weight:800; display:flex; align-items:center; gap:7px; line-height:1.25; }
+.hm .ch-h b i{ width:10px; height:10px; border-radius:50%; flex:none; background:var(--k); }
+.hm .ch-h span{ font-size:12px; color:var(--ink2); font-weight:500; }
+.hm .ch-h em{ font-style:normal; font-size:11.5px; color:var(--ink2); font-feature-settings:"tnum"; }
+.hm .rh{ display:flex; flex-direction:column; justify-content:center; padding:0 6px 0 2px; min-height:80px; }
+.hm .rh b{ font-size:13.5px; font-weight:800; line-height:1.25; }
+.hm .rh span{ font-size:11.5px; color:var(--ink2); }
+.hm .ch-h.on b, .hm .rh.on b{ text-decoration:underline; text-underline-offset:4px; text-decoration-thickness:2px; }
+.cell{ position:relative; border:1px solid var(--cellb); border-radius:8px; min-height:80px; padding:8px 6px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+       transition:background-color .3s ease, transform .12s, box-shadow .12s; }
+.cell:hover{ transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.18); }
+.cell .v{ font-size:22px; font-weight:800; letter-spacing:-.02em; line-height:1.05; }
+.cell .t{ font-size:11px; font-weight:600; line-height:1.4; opacity:.88; font-feature-settings:"tnum"; border-radius:999px; padding:0 8px; }
+.cell .t.sig{ font-weight:800; opacity:1; background:color-mix(in srgb, currentColor 16%, transparent); }
+.cell[aria-pressed="true"]{ box-shadow:0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.hm .gauge{ height:6px; border-radius:3px; background:var(--wash); box-shadow:inset 0 0 0 1px var(--grid); overflow:hidden; margin:5px 0 3px; }
+.hm .gauge i{ display:block; height:100%; border-radius:3px; }
+.tg{ margin-left:auto; }
+.scale{ margin-top:20px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0 12px; align-items:center; font-size:12px; color:var(--ink2); font-weight:600; }
+.scale .bar{ height:12px; border-radius:6px; border:1px solid var(--grid); }
+.scale .lab{ display:flex; justify-content:space-between; grid-column:2; font-size:11.5px; color:var(--muted); margin-top:4px; font-feature-settings:"tnum"; }
+.scale small{ grid-column:1 / 4; margin-top:8px; font-size:12px; color:var(--muted); font-weight:500; }
+
+/* ───────── detail ───────── */
+.dt-top{ display:flex; gap:20px 32px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px; }
+.dt-top .big{ font-size:48px; line-height:.95; font-weight:800; letter-spacing:-.04em; }
+.dt-top .st{ display:flex; gap:20px; flex-wrap:wrap; }
+.dt-top .st div{ font-size:12px; color:var(--ink2); }
+.dt-top .st b{ display:block; font-size:15px; color:var(--ink); font-weight:800; }
+.read{ margin:0 0 14px; font-size:13px; color:var(--ink2); background:var(--wash); border-radius:6px; padding:10px 12px; }
+.read b{ color:var(--ink); }
+.read .warn{ color:var(--ink); font-weight:700; }
+#sc{ width:100%; }
+.xl{ font-size:11.5px; fill:var(--ink2); }
+.tick{ font-size:11px; fill:var(--muted); }
+.lbl{ font-size:11px; font-weight:700; fill:var(--ink); paint-order:stroke; stroke:var(--surface); stroke-width:3px; stroke-linejoin:round; }
+.keys{ display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; font-size:12px; color:var(--ink2); font-weight:600; }
+.keys span{ display:inline-flex; align-items:center; gap:7px; }
+.keys .ln{ width:18px; border-top:2px solid var(--ink2); display:inline-block; }
+.keys .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; background:var(--k); }
+.coef{ margin-top:18px; }
+.coef .sec{ font-size:11px; font-weight:700; letter-spacing:.06em; color:var(--muted); margin:0 0 8px; display:flex; align-items:center; gap:10px; }
+.coef .sec::after{ content:""; flex:1; border-top:1px solid var(--grid); }
+.coef .fit{ font-size:12.5px; color:var(--ink2); margin:0 0 8px; }
+.coef table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.coef th,.coef td{ text-align:right; padding:5px 8px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.coef th:first-child,.coef td:first-child{ text-align:left; }
+.coef th{ color:var(--ink2); font-weight:700; }
+.coef tr.on td{ background:var(--wash); font-weight:700; }
+.coef-wrap{ overflow-x:auto; }
+
+/* tooltip */
+.tip{ position:fixed; z-index:50; pointer-events:none; min-width:150px; max-width:280px; background:var(--surface); color:var(--ink);
+      border:1px solid var(--axis); border-radius:6px; padding:9px 11px; box-shadow:0 6px 24px rgba(0,0,0,.14); font-size:12.5px; opacity:0; transition:opacity .12s; }
+.tip.on{ opacity:1; }
+.tip .tt{ font-weight:800; font-size:13.5px; margin-bottom:4px; }
+.tip .row{ display:flex; gap:10px; padding:1px 0; }
+.tip .row .l{ color:var(--ink2); flex:1; }
+.tip .row .v{ font-weight:800; font-feature-settings:"tnum"; }
+.tip .ft{ color:var(--ink2); margin-top:4px; border-top:1px solid var(--grid); padding-top:4px; font-size:12px; }
+
+/* table + footer */
+details.tbl{ margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 22px; }
+details.tbl summary{ cursor:pointer; font-weight:800; }
+.tbl-wrap{ overflow:auto; max-height:460px; margin-top:12px; }
+.tbl-wrap table{ border-collapse:collapse; width:100%; font-size:12.5px; font-feature-settings:"tnum"; }
+.tbl-wrap th,.tbl-wrap td{ text-align:right; padding:5px 10px; border-bottom:1px solid var(--grid); white-space:nowrap; }
+.tbl-wrap th:first-child,.tbl-wrap td:first-child{ text-align:left; }
+.tbl-wrap th{ position:sticky; top:0; background:var(--surface); color:var(--ink2); font-weight:700; }
+.foot{ margin-top:18px; font-size:12px; color:var(--ink2); display:grid; gap:4px; max-width:108ch; }
+.foot b{ color:var(--ink); }
+
+@media (max-width: 980px){ .hd{ grid-template-columns:1fr; } .grid{ grid-template-columns:minmax(0,1fr); } }
+@media (max-width: 560px){
+  .hv{ padding:20px 12px 28px; } .card{ padding:16px 12px; }
+  .hm{ grid-template-columns:minmax(80px,96px) repeat(3,minmax(0,1fr)); gap:4px; }
+  .cell .v{ font-size:16px; } .cell .t:not(.sig){ display:none; } .cell .t.sig{ font-size:9.5px; padding:0 5px; } .tg{ margin-left:0; } .hm .rh span{ display:none; } .hm .ch-h span{ display:none; } .hm .ch-h em{ font-size:10.5px; }
+}
+@media (prefers-reduced-motion: reduce){ .cell, .tip{ transition:none; } }
+
+/* ───────── embed (웹앱 iframe 안) ───────── */
+html.embed, html.embed body{ background:#f3f4f0 !important; color-scheme:light; }
+html.embed[data-theme="dark"], html.embed[data-theme="dark"] body{ background:#0b0c0c !important; color-scheme:dark; }
+html.embed #root{ background:transparent; padding:4px 0 8px; min-height:0; }
+@media (min-width: 900px){ html.embed .wrap{ zoom:.87; } }
+html.embed .tg, html.embed #seg-theme{ display:none !important; }
+</style>
+</head>
+<body>
+<div class="hv" id="root">
+<div class="wrap">
+
+  <header class="hd">
+    <div>
+      <p class="eyebrow">서울특별시 25개 자치구 · 인구지표 × 투표 성향 · 다중 회귀</p>
+      <h1 id="headline"></h1>
+      <p class="sub" id="subline"></p>
+    </div>
+    <div class="hero" id="hero" aria-live="polite"></div>
+  </header>
+
+  <section class="filters" aria-label="보기 설정">
+    <p class="fnote">부양비·노령화지수·중위연령·평균연령을 <b>모두 한꺼번에 넣은</b> 다중 회귀 결과입니다. <b>+</b>는 그 지표가 높은 구일수록 투표율·득표율이 높아지는 방향, <b>−</b>는 낮아지는 방향이며, 다른 지표를 함께 고려한 값입니다. 인구지표는 2025년, 투표는 2022년 자료라 3년 시차가 있습니다.</p>
+    <div class="fg tg"><span class="fl">화면</span>
+      <div class="seg" id="seg-theme" role="group" aria-label="화면 모드">
+        <button data-v="auto" aria-pressed="true">자동</button>
+        <button data-v="light" aria-pressed="false">라이트</button>
+        <button data-v="dark" aria-pressed="false">다크</button>
+      </div></div>
+  </section>
+
+  <main class="grid">
+    <article class="card">
+      <div class="ch"><h2>인구지표별 다중 회귀 히트맵</h2>
+        <p class="cs">칸 안의 숫자는 표준화 회귀계수 β입니다. 인구지표를 한꺼번에 넣고 다른 지표를 함께 고려한 값이며, 색이 진할수록 |β|가 큽니다. 칸을 누르면 오른쪽에 자세히 나옵니다.</p></div>
+      <div class="hm" id="hm" role="grid" aria-label="인구지표와 투표율·득표율의 다중 회귀 표준화 계수"></div>
+      <div class="scale" id="scale"></div>
+    </article>
+
+    <article class="card" id="c-detail">
+      <div class="ch"><h2 id="dt-title"></h2><p class="cs" id="dt-sub"></p></div>
+      <div class="dt-top" id="dt-top"></div>
+      <p class="read" id="dt-read"></p>
+      <div id="sc"></div>
+      <div class="keys" id="sc-keys"></div>
+      <div class="coef" id="coef"></div>
+    </article>
+  </main>
+
+  <details class="tbl" id="tables">
+    <summary>표로 보기 (3개 모형의 회귀계수 · 구별 원자료)</summary>
+    <div class="tbl-wrap" id="t-models"></div>
+    <div class="tbl-wrap" id="t-gu"></div>
+  </details>
+
+  <footer class="foot">
+    <p><b>모형:</b> 결과변수(전체 투표율 / 윤석열 득표율 / 이재명 득표율) 각각에 대해 25개 구를 관측치로, 유소년부양비·노년부양비·노령화지수·중위연령·평균연령 5개를 <b>모두</b> 설명변수로 넣은 최소제곱 다중 회귀입니다. 총부양비는 유소년부양비 + 노년부양비라 셋을 동시에 넣을 수 없으므로(완전 공선), 총부양비 행은 <b>총부양비가 1 늘고 그 증가분이 유소년·노년 부양비에 25개 구 평균 비율대로 나뉘어 반영될 때</b>의 효과(두 계수의 가중 결합)로 계산했습니다. β는 표준화 계수(= B × 설명변수 표준편차 ÷ 결과변수 표준편차)로 지표끼리 크기를 비교할 수 있으며, 색은 |β| 1.5에서 최대입니다. B는 노령화지수는 10당, 나머지는 1(세)당 효과입니다.</p>
+    <p><b>주의:</b> 25개 구에 변수 5개라 잔차 자유도가 19뿐이고, 중위연령·평균연령·노령화지수·부양비는 서로 매우 비슷하게 움직여(VIF 10~46) 개별 계수가 불안정하고 부호가 직관과 반대로 나오기도 합니다. 모형 전체의 설명력(R²)과 95% 신뢰구간을 함께 보세요. 인구지표는 2025년, 투표·득표는 2022년 자료라 3년 시차가 있으며, 총부양비는 유소년+노년 부양비의 합(파일 표기값과 반올림 차이 0.1 이내)으로 계산했습니다. 구 단위 관계이므로 인과나 개인의 선택으로 해석할 수 없습니다.</p>
+    <p><b>자료:</b> 전체 투표율은 「성별·연령대별 투표율(구시군별)」의 구별 합계 투표율(선관위 표본 투표구 기준), 득표율은 서울 득표율 자료의 윤석열·이재명 득표수 ÷ 유효투표수, 인구지표는 KOSIS 「주요 인구지표(부양비, 노령화지수, 중위연령 등) - 시군구」(인구총조사 2025). 출처: 중앙선거관리위원회 · 공공데이터포털 · 국가데이터처 KOSIS</p>
+  </footer>
+</div>
+<div class="tip" id="tip" role="status"></div>
+</div>
+
+<script>
+{ const q0 = new URLSearchParams(location.search); if (q0.get('embed')) document.documentElement.classList.add('embed'); }
+const DATA = {"districts":[{"name":"종로구","x":[36.3,8.3,28.0,338.8,45.4,45.6],"turn":77.5,"lee":46.42433025,"yoon":49.48573959},{"name":"중구","x":[37.5,8.3,29.2,350.3,44.8,46.0],"turn":76.0,"lee":45.42906015,"yoon":50.96692958},{"name":"용산구","x":[36.8,10.6,26.2,247.1,44.4,45.3],"turn":76.9,"lee":39.86076638,"yoon":56.44137986},{"name":"성동구","x":[37.6,11.4,26.2,230.6,43.9,44.7],"turn":78.6,"lee":43.23492353,"yoon":53.20685522},{"name":"광진구","x":[33.2,9.1,24.1,264.1,42.8,44.1],"turn":76.5,"lee":47.19343288,"yoon":48.82963103},{"name":"동대문구","x":[37.7,10.5,27.2,260.0,43.1,44.2],"turn":77.0,"lee":47.10521388,"yoon":49.16019631},{"name":"중랑구","x":[43.8,10.6,33.2,314.4,48.5,47.4],"turn":75.4,"lee":50.4525526,"yoon":45.73934983},{"name":"성북구","x":[39.4,11.7,27.7,236.9,44.8,44.6],"turn":77.3,"lee":49.31659288,"yoon":46.67005346},{"name":"강북구","x":[48.3,9.3,39.0,420.8,51.2,49.0],"turn":74.4,"lee":52.32660006,"yoon":43.82282494},{"name":"도봉구","x":[49.8,10.8,39.0,362.8,51.5,48.9],"turn":77.0,"lee":49.75181527,"yoon":46.59242138},{"name":"노원구","x":[43.0,12.5,30.5,243.3,47.3,45.8],"turn":78.7,"lee":48.94137444,"yoon":47.22542667},{"name":"은평구","x":[43.9,11.4,32.5,286.4,48.1,47.0],"turn":76.1,"lee":51.26976065,"yoon":44.6530379},{"name":"서대문구","x":[37.4,10.9,26.5,242.3,43.4,44.2],"turn":78.4,"lee":48.3326294,"yoon":47.47926586},{"name":"마포구","x":[33.6,11.0,22.6,205.5,42.3,43.5],"turn":79.4,"lee":46.50528093,"yoon":49.0337364},{"name":"양천구","x":[44.2,15.3,28.9,188.9,47.0,45.3],"turn":79.7,"lee":46.39017206,"yoon":50.13724309},{"name":"강서구","x":[40.7,11.7,29.0,246.9,45.0,45.4],"turn":77.6,"lee":49.17489699,"yoon":46.97755554},{"name":"구로구","x":[43.4,11.5,31.9,276.2,48.0,46.9],"turn":78.8,"lee":49.19728545,"yoon":47.0160321},{"name":"금천구","x":[38.6,8.4,30.2,359.5,48.1,47.3],"turn":75.1,"lee":51.56943176,"yoon":44.50923914},{"name":"영등포구","x":[37.1,10.6,26.5,249.3,44.5,45.3],"turn":79.0,"lee":44.60067642,"yoon":51.64950073},{"name":"동작구","x":[37.1,10.1,27.0,268.7,43.6,44.6],"turn":78.0,"lee":45.74259047,"yoon":50.51319648},{"name":"관악구","x":[30.7,6.3,24.4,387.7,40.3,44.0],"turn":76.7,"lee":50.32313299,"yoon":45.16846317},{"name":"서초구","x":[41.7,16.4,25.3,154.3,44.9,43.8],"turn":81.2,"lee":32.18414998,"yoon":65.13038997},{"name":"강남구","x":[40.5,15.9,24.6,154.8,44.7,43.7],"turn":79.0,"lee":30.35739142,"yoon":67.01181457},{"name":"송파구","x":[41.0,14.6,26.4,180.4,44.5,44.3],"turn":80.1,"lee":40.15261062,"yoon":56.76536673},{"name":"강동구","x":[44.3,15.6,28.7,183.7,45.2,44.8],"turn":79.1,"lee":44.80977771,"yoon":51.70678464}],"rows":[{"label":"총부양비","desc":"유소년+노년 부양비의 합","unit":"","dec":1,"step":1,"stepTxt":"1"},{"label":"유소년부양비","desc":"생산연령(15–64세) 100명당 유소년(0–14세)","unit":"","dec":1,"step":1,"stepTxt":"1"},{"label":"노년부양비","desc":"생산연령 100명당 고령(65세 이상)","unit":"","dec":1,"step":1,"stepTxt":"1"},{"label":"노령화지수","desc":"유소년 100명당 고령 인구","unit":"","dec":0,"step":10,"stepTxt":"10"},{"label":"중위연령","desc":"나이순으로 세웠을 때 한가운데 나이","unit":"세","dec":1,"step":1,"stepTxt":"1세"},{"label":"평균연령","desc":"전체 인구의 산술평균 나이","unit":"세","dec":1,"step":1,"stepTxt":"1세"}],"share":0.28348035284683243,"mr":[{"n":25,"df":19,"r2":0.7227220374857161,"adj":0.6497541526135361,"F":9.904659272387159,"pF":8.767584503041399e-05,"a":87.11244608242542,"coefs":[{"i":0,"b":0.06018192116613926,"se":0.13251477781941104,"t":0.4541525266574736,"p":0.6548643679313078,"lo":-0.21717469637445994,"hi":0.33753853870673844,"beta":0.16449055155718778,"vif":8.98910992105499,"cpr":[[36.3,90.38699299],[37.5,89.12698872],[36.8,88.45433615],[37.6,89.73280836],[33.2,88.02652138],[37.7,88.49027867],[43.8,88.54637238],[39.4,88.5481425],[48.3,89.41167449],[49.8,91.31660566],[43.0,90.37305572],[43.9,88.73662554],[37.4,89.63594782],[33.6,89.8570316],[44.2,90.11741344],[40.7,89.19356388],[43.4,91.27505703],[38.6,88.70844055],[37.1,90.59884917],[37.1,89.71115181],[30.7,89.51884502],[41.7,90.44182978],[40.5,88.2742868],[41.0,90.12525491],[44.3,89.24056224]]},{"i":1,"b":0.30978706262193595,"se":0.3132571820654203,"t":0.9889224584713283,"p":0.33512859131928263,"lo":-0.3458677546571501,"hi":0.965441879901022,"beta":0.47865829808243393,"vif":16.053323286905407,"cpr":[[8.3,90.77362188],[8.3,89.4413993],[10.6,89.52338431],[11.4,91.00154064],[9.1,88.84754387],[10.5,89.4741844],[10.6,89.1941471],[11.7,89.80148344],[9.3,89.38590738],[10.8,91.66524626],[12.5,91.6575714],[11.4,89.62621171],[10.9,90.76182295],[11.0,91.24257674],[15.3,92.19711458],[11.7,90.36866832],[11.5,92.22571287],[8.4,88.98762972],[10.6,91.64984276],[10.1,90.60725187],[6.3,89.62291853],[16.4,93.01275149],[15.9,90.76253329],[14.6,92.18068726],[15.6,91.40718131]]},{"i":2,"b":-0.038570644591691565,"se":0.21093408669939706,"t":-0.18285638511644983,"p":0.8568477644071177,"lo":-0.4800607619481762,"hi":0.40291947276479306,"beta":-0.09486362009563556,"vif":18.442397332711547,"cpr":[[28.0,87.12241121],[29.2,85.74390386],[26.2,85.22909056],[26.2,86.45941724],[24.1,85.09892906],[27.2,85.17229871],[33.2,84.62985884],[27.7,85.10856796],[39.0,85.00063256],[39.0,86.81529084],[30.5,86.60882845],[32.5,84.84109325],[26.5,86.36302189],[22.6,86.96322248],[28.9,86.3426809],[29.0,85.625611],[31.9,87.43275809],[30.2,85.22058493],[26.5,87.34397781],[27.0,86.43699513],[24.4,86.73013631],[25.3,86.95640636],[24.6,84.88808114],[26.4,86.63953112],[28.7,85.46752563]]},{"i":3,"b":-0.0053507717430206865,"se":0.01162987882818231,"t":-0.46008834847482105,"p":0.650674442121171,"lo":-0.029692387880260115,"hi":0.01899084439421874,"beta":-0.2319877441574511,"vif":17.421512639745952,"cpr":[[338.8,86.38954779],[350.3,84.99579134],[247.1,84.91746575],[230.6,86.23608016],[264.1,84.61534278],[260.0,84.83021959],[314.4,84.2281216],[236.9,84.90937698],[420.8,84.25328295],[362.8,86.37828599],[243.3,86.48339035],[286.4,84.56217817],[242.3,86.08865198],[205.5,86.73533546],[188.9,86.44661174],[246.9,85.42305415],[276.2,87.1852785],[359.5,84.46181596],[249.3,87.0321525],[268.7,86.04065017],[387.7,85.59676583],[154.3,87.10661959],[154.8,85.00861953],[180.4,86.69251692],[183.7,85.59156636]]},{"i":4,"b":-0.031155556619924172,"se":0.4319538724471176,"t":-0.07212704551858931,"p":0.9432546556880346,"lo":-0.9352454020465574,"hi":0.872934288806709,"beta":-0.04971111132166471,"vif":32.549843540422515,"cpr":[[45.4,86.78792699],[44.8,85.47439774],[44.4,84.85633473],[43.9,86.10223919],[42.8,84.69502378],[43.1,84.87861575],[48.5,84.39935974],[44.8,84.78120587],[51.2,84.9097232],[51.5,86.71503482],[47.3,86.31157529],[48.1,84.59605692],[43.4,86.03299281],[42.3,86.51703901],[47.0,85.99306136],[45.0,85.34215964],[48.0,87.16769493],[48.1,84.88683612],[44.5,86.97967762],[43.6,86.12002026],[40.3,86.4156911],[44.9,86.53335917],[44.7,84.44426561],[44.5,86.27137387],[45.2,85.16627197]]},{"i":5,"b":-0.1966302651453743,"se":0.8868057185195029,"t":-0.22172868424173334,"p":0.826890830291347,"lo":-2.052735965593533,"hi":1.659475435302784,"beta":-0.18230720329194128,"vif":46.323583123794094,"cpr":[[45.6,79.23604917],[46.0,77.82517448],[45.3,77.33229044],[44.7,78.68059527],[44.1,77.35708691],[44.2,77.53036252],[47.4,76.59012967],[44.6,77.40726499],[49.0,76.87000471],[48.9,78.70432602],[45.8,78.77956697],[47.0,76.85301674],[44.2,78.69408625],[43.5,79.28150252],[45.3,78.55002151],[45.4,77.81714565],[46.9,79.44120222],[47.3,77.08480686],[45.3,79.45874888],[44.6,78.70869271],[44.0,79.01952837],[43.8,79.31983805],[43.7,77.24417641],[44.3,78.94707539],[44.8,77.76546725]]}],"r2_check":1.1102230246251565e-16},{"n":25,"df":19,"r2":0.6758283798869842,"adj":0.5905200588046116,"F":7.922185917062106,"pF":0.0003545308025901089,"a":-43.43373030133924,"coefs":[{"i":0,"b":-0.5300192415670776,"se":0.5026161799597987,"t":-1.0545208505016108,"p":0.3048703798252328,"lo":-1.582006996357749,"hi":0.5219685132235937,"beta":-0.4129754281210703,"vif":8.98910992105499,"cpr":[[36.3,-61.0037465],[37.5,-59.30516078],[36.8,-57.24530235],[37.6,-61.00054378],[33.2,-61.21012636],[37.7,-61.44001377],[43.8,-67.43224248],[39.4,-66.88048104],[48.3,-67.82145624],[49.8,-65.79274265],[43.0,-68.29382122],[43.9,-69.52234878],[37.4,-64.2975584],[33.6,-64.54297248],[44.2,-73.19224013],[40.7,-66.94031588],[43.4,-67.401496],[38.6,-68.33118323],[37.1,-61.77627696],[37.1,-60.40171831],[30.7,-63.51355846],[41.7,-62.00549988],[40.5,-59.07315934],[41.0,-64.71377805],[44.3,-71.45270984]]},{"i":1,"b":3.400238055180633,"se":1.188155244158961,"t":2.8617792766529435,"p":0.009981516654852118,"lo":0.9134005487845567,"hi":5.887075561576709,"beta":1.4977154352185376,"vif":16.053323286905407,"cpr":[[8.3,-13.54207217],[8.3,-11.20746336],[10.6,-1.69807088],[11.4,-2.30910647],[9.1,-12.67132124],[10.5,-5.75578878],[10.6,-8.17487631],[11.7,-6.21493767],[9.3,-10.59931296],[10.8,-2.67521343],[12.5,-3.00001814],[11.4,-7.49179025],[10.9,-7.41224396],[11.0,-9.33170736],[15.3,2.25825259],[11.7,-5.5857475],[11.5,-5.29592328],[8.4,-19.31044085],[10.6,-6.07003971],[10.1,-6.39560009],[6.3,-25.82046799],[16.4,15.8602066],[15.9,16.45640502],[14.6,6.66048646],[15.6,5.07085622]]},{"i":2,"b":-2.084967148002793,"se":0.8000532968831654,"t":-2.606035318053652,"p":0.017360131950397716,"lo":-3.7594979431879256,"hi":-0.41043635281766,"beta":-1.4618394561700627,"vif":18.442397332711547,"cpr":[[28.0,-100.14312817],[29.2,-100.31047994],[26.2,-92.36673354],[26.2,-95.69795958],[24.1,-93.86119581],[27.2,-98.16939479],[33.2,-113.43830901],[27.7,-103.75131292],[39.0,-123.53524565],[39.0,-120.7115032],[30.5,-109.09449184],[32.5,-114.01593639],[26.5,-99.72646818],[22.6,-93.85458351],[28.9,-110.02094023],[29.0,-105.83258004],[31.9,-110.90911294],[30.2,-110.83844838],[26.5,-97.36419252],[27.0,-97.03211744],[24.4,-98.11516615],[25.3,-92.65336635],[24.6,-88.8975719],[26.4,-98.02612185],[28.7,-107.81141459]]},{"i":3,"b":0.0864482228746493,"se":0.04411104456577894,"t":1.9597863466084244,"p":0.06485566559684579,"lo":-0.005877254466602699,"hi":0.1787737002159013,"beta":1.0684700501834257,"vif":17.421512639745952,"cpr":[[338.8,-12.47539012],[350.3,-9.14662675],[247.1,-16.37923839],[230.6,-21.1368601],[264.1,-20.78251188],[260.0,-18.98175042],[314.4,-17.03807843],[236.9,-25.51813892],[420.8,-5.84411469],[362.8,-8.03436917],[243.3,-24.4701412],[286.4,-21.49573305],[242.3,-23.52843436],[205.5,-28.96921616],[188.9,-33.43532035],[246.9,-24.02446652],[276.2,-20.52166176],[359.5,-16.79430439],[249.3,-20.56102114],[268.7,-17.50936696],[387.7,-13.72599173],[154.3,-26.56473672],[154.8,-24.22519516],[180.4,-27.38772974],[183.7,-32.0923189]]},{"i":4,"b":0.15393754970470166,"se":1.638360708600231,"t":0.09395827725643002,"p":0.9261260688574683,"lo":-3.2751908231930145,"hi":3.583065922602418,"beta":0.0700196915443809,"vif":32.549843540422515,"cpr":[[45.4,-34.77528327],[44.8,-32.53303699],[44.4,-30.90576706],[43.9,-34.31396187],[42.8,-37.02496042],[43.1,-34.82357997],[48.5,-36.75142854],[44.8,-39.10132069],[51.2,-34.33992433],[51.5,-31.47000061],[47.3,-38.22174773],[48.1,-38.85010794],[43.4,-37.7939491],[42.3,-40.22276761],[47.0,-42.53032482],[45.0,-38.44134301],[48.0,-37.00965853],[48.1,-40.46804437],[44.5,-35.26234214],[43.6,-34.02632728],[40.3,-41.03828449],[44.9,-32.99190153],[44.7,-30.72637159],[44.5,-36.13276818],[45.2,-41.01488019]]},{"i":5,"b":1.8668743253421782,"se":3.3635712932802178,"t":0.5550274284573191,"p":0.5853516430060182,"lo":-5.173161300210563,"hi":8.90690995089492,"beta":0.4934307529525819,"vif":46.323583123794094,"cpr":[[45.6,43.36542121],[46.0,46.44677975],[45.3,46.82881267],[44.7,42.37746204],[44.1,38.71567021],[44.2,41.05755682],[47.4,44.27244332],[44.6,37.26487199],[49.0,49.25531506],[48.9,51.89237008],[45.8,39.99985027],[47.0,41.48858921],[44.2,38.04100642],[43.5,34.47470719],[45.3,34.80401728],[45.4,39.38756162],[46.9,43.15774494],[47.3,40.43071508],[45.3,42.45684384],[44.6,42.52459047],[44.0,34.90050257],[43.8,41.86539794],[43.7,43.97502796],[44.3,39.71954347],[44.8,35.66311234]]}],"r2_check":2.220446049250313e-16},{"n":25,"df":19,"r2":0.6769059871446828,"adj":0.5918812469195993,"F":7.961282626124226,"pF":0.00034420086039335836,"a":130.08704132198218,"coefs":[{"i":0,"b":0.539022420100477,"se":0.4704565196443654,"t":1.1457433314091234,"p":0.26612786203888494,"lo":-0.4456543920683924,"hi":1.5236992322693463,"beta":0.4479539169360296,"vif":8.98910992105499,"cpr":[[36.3,147.95005333],[37.5,146.71910999],[36.8,144.36879774],[37.6,148.24112916],[33.2,148.32473443],[37.7,148.76052857],[43.8,154.48117492],[39.4,153.73871385],[48.3,154.90622864],[49.8,153.05251859],[43.0,155.20045023],[43.9,156.2434495],[37.4,151.09135563],[33.6,150.94269747],[44.2,159.9078551],[40.7,153.90822166],[43.4,154.40044849],[38.6,155.26627704],[37.1,148.86893459],[37.1,147.68316852],[30.7,150.08724424],[41.7,149.24002713],[40.5,146.4395876],[41.0,151.93638612],[44.3,158.14570678]]},{"i":1,"b":-3.0966002547798346,"se":1.1121316886554176,"t":-2.7843827186721626,"p":0.011818701882451757,"lo":-5.42431863080535,"hi":-0.7688818787543195,"beta":-1.4547858230964261,"vif":16.053323286905407,"cpr":[[8.3,102.68175737],[8.3,100.80398713],[10.6,91.70880998],[11.4,92.67264326],[9.1,102.25012777],[10.5,95.92508066],[10.6,98.04803022],[11.7,96.27100752],[9.3,100.07306338],[10.8,92.76591932],[12.5,93.31498298],[11.4,97.27912235],[10.9,97.17897434],[11.0,98.76894135],[15.3,88.70508023],[11.7,95.73978618],[11.5,95.39597253],[8.4,108.44856949],[10.6,96.04724011],[10.1,96.40977416],[6.3,114.03067434],[16.4,75.97854803],[15.9,75.37323553],[14.6,84.62610317],[15.6,85.9600496]]},{"i":2,"b":1.9774025158701265,"se":0.7488622622768721,"t":2.640542347344289,"p":0.01612465692381971,"lo":0.4100157874860133,"hi":3.5447892442542397,"beta":1.478732025732059,"vif":18.442397332711547,"cpr":[[28.0,183.75080993],[29.2,184.2459227],[26.2,176.3407186],[26.2,179.78183208],[24.1,178.08459072],[27.2,182.22473177],[33.2,196.52175645],[27.7,187.27528019],[39.0,205.99014387],[39.0,203.32790019],[30.5,192.3332629],[32.5,196.84594702],[26.5,183.33308379],[22.6,177.52084101],[28.9,193.22999684],[29.0,189.31468212],[31.9,194.08601572],[30.2,194.17756761],[26.5,181.27236948],[27.0,181.07530466],[24.4,181.78787733],[25.3,176.79107586],[24.6,173.25328147],[26.4,182.03989331],[28.7,191.01846578]]},{"i":3,"b":-0.07954428424336848,"se":0.041288620087705334,"t":-1.926542569705658,"p":0.06912901041150495,"lo":-0.16596235926026162,"hi":0.006873790773524652,"beta":-1.0485984095666656,"vif":17.421512639745952,"cpr":[[338.8,101.43393598],[350.3,98.64140647],[247.1,104.87738005],[230.6,109.63097422],[264.1,109.42154462],[260.0,107.75786943],[314.4,105.86326996],[236.9,113.65718956],[420.8,95.39921094],[362.8,97.35053575],[243.3,112.66936181],[286.4,109.79888225],[242.3,111.65833704],[205.5,116.48519374],[188.9,121.05714884],[246.9,112.33052538],[276.2,109.03674415],[359.5,105.86384144],[249.3,109.04081274],[268.7,106.31188756],[387.7,102.69993694],[154.3,114.48910915],[154.8,112.29572438],[180.4,115.48667801],[183.7,119.65472855]]},{"i":4,"b":-0.16743412021312667,"se":1.533530967808858,"t":-0.10918209265272298,"p":0.914202947233041,"lo":-3.3771513240171123,"hi":3.042283083590859,"beta":-0.0812294516303298,"vif":32.549843540422515,"cpr":[[45.4,120.78203043],[44.8,119.00472066],[44.4,117.09869775],[43.9,120.62352829],[42.8,123.26300974],[43.1,121.22297275],[48.5,122.75143809],[44.8,125.00018191],[51.2,120.29881879],[51.5,117.58634488],[47.3,124.10285228],[48.1,124.52678407],[43.4,123.6652763],[42.3,125.74908087],[47.0,128.21366048],[45.0,124.43547375],[48.0,122.97003769],[48.1,126.40643045],[44.5,121.42038446],[43.6,120.38530909],[40.3,126.7916609],[44.9,119.24500021],[44.7,117.12487441],[44.5,122.38564854],[45.2,126.69899134]]},{"i":5,"b":-1.690210197383569,"se":3.1483547631492423,"t":-0.5368550638470241,"p":0.5975988473630236,"lo":-8.27979244846589,"hi":4.899372053698752,"beta":-0.47648121217886025,"vif":46.323583123794094,"cpr":[[45.6,51.30995448],[46.0,48.75610016],[45.3,47.96625074],[44.7,52.42149034],[44.1,55.89092038],[44.2,53.73209261],[47.4,50.75602957],[44.6,57.1178557],[49.0,46.05114607],[48.9,43.55792342],[45.8,54.61085913],[47.0,53.14048598],[44.2,56.22462639],[43.5,59.30740057],[45.3,59.51654219],[45.4,55.2344662],[46.9,51.7360172],[47.3,54.51306929],[45.3,52.30468087],[44.6,52.30206193],[44.0,59.17000726],[43.8,52.73158556],[43.7,50.74699396],[44.3,54.96015515],[44.8,58.54559673]]}],"r2_check":4.440892098500626e-16}]};
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const S = (tag, a = {}, p) => { const n = document.createElementNS(SVGNS, tag); for (const k in a) n.setAttribute(k, a[k]); if (p) p.appendChild(n); return n; };
+const H = (tag, a = {}, p) => { const n = document.createElement(tag); for (const k in a) { if (k === 'text') n.textContent = a[k]; else if (k === 'class') n.className = a[k]; else n.setAttribute(k, a[k]); } if (p) p.appendChild(n); return n; };
+const sgn = (v, d) => { const s = Math.abs(v).toFixed(d); return (+s === 0) ? (0).toFixed(d) : (v >= 0 ? '+' : '−') + s; };
+const fr = v => sgn(v, 2);
+const fb = v => Math.abs(v) < 0.1 ? sgn(v, 3) : sgn(v, 2);
+const f1 = v => v.toFixed(1);
+const fp = p => p < 0.001 ? '<0.001' : p.toFixed(3);
+const SAT = 1.5;
+const pTxt = p => p < 0.001 ? 'p<0.001' : 'p=' + p.toFixed(3);
+const hasBatchim = w => { const c = w.charCodeAt(w.length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 !== 0; };
+const pick = (w, a, b) => w + (hasBatchim(w) ? a : b);
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+
+/* ───────── 색 (OKLCH) : 중립(회색) → 양(+)은 빨강, 음(−)은 파랑. 진할수록 |β| 큼 ───────── */
+function oklch2hex(L, C, h) {
+  const g = c => c <= .0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - .055;
+  for (let k = 0; k < 60; k++) {
+    const a = C * Math.cos(h * Math.PI / 180), b = C * Math.sin(h * Math.PI / 180);
+    const l = (L + .3963377774 * a + .2158037573 * b) ** 3, m = (L - .1055613458 * a - .0638541728 * b) ** 3, s = (L - .0894841775 * a - 1.291485548 * b) ** 3;
+    const rgb = [4.0767416621 * l - 3.3077115913 * m + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - .3413193965 * s, -.0041960863 * l - .7034186147 * m + 1.707614701 * s];
+    if (rgb.every(v => v >= -1e-4 && v <= 1 + 1e-4) || k === 59) return '#' + rgb.map(v => Math.round(g(Math.min(1, Math.max(0, v))) * 255).toString(16).padStart(2, '0')).join('');
+    C *= .95;
+  }
+}
+function colorOf(r) {
+  const t = Math.min(1, Math.abs(r) / SAT), h = r >= 0 ? 27 : 258, dark = isDark();
+  const L = dark ? .33 + .27 * t : .955 - .60 * t;
+  const C = (r >= 0 ? .215 : .19) * Math.min(1, t * 1.35);
+  return oklch2hex(L, C, h);
+}
+const lum = hex => { const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4); return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]; };
+const contrast = (a, b) => (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+const textOn = hex => { const L = lum(hex); return contrast(L, 1) >= contrast(L, 0) ? '#ffffff' : '#000000'; };
+
+/* ───────── 데이터 ───────── */
+const G = DATA.districts, MR = DATA.mr, ROWS = DATA.rows, YSHARE = DATA.share;   // MR[결과변수] = 인구지표를 모두 넣은 다중 회귀 모형 (viz/build_pop_heatmap.py → viz/mreg.py)
+const COLS = [
+  { key: 'turn', label: '전체 투표율', sub: '서울 25개 구 투표율', css: 'var(--turn)' },
+  { key: 'yoon', label: '보수 득표율', sub: '윤석열', css: 'var(--yoon)' },
+  { key: 'lee', label: '진보 득표율', sub: '이재명', css: 'var(--lee)' },
+];
+const state = { sel: null, pin: null };
+{ const q = new URLSearchParams(location.search); if (q.get('theme')) document.documentElement.dataset.theme = q.get('theme'); }
+const model = c => MR[c];
+const coefOf = (i, c) => model(c).coefs.find(k => k.i === i);
+const NTOT = 0;                                    // 행 0 = 총부양비 (유소년+노년의 합)
+const fx = (i, v) => v.toFixed(ROWS[i].dec) + (ROWS[i].unit || '');
+const bStep = (i, v) => v * ROWS[i].step;          // 단위(step)당 효과
+const stepLbl = i => ROWS[i].stepTxt;
+const mixTxt = `${(YSHARE * 100).toFixed(0)}:${((1 - YSHARE) * 100).toFixed(0)}`;
+
+function sentence(i, c) {
+  const k = coefOf(i, c), sig = k.p < 0.05, dir = k.b > 0 ? '높아' : '낮아';
+  const bb = Math.abs(bStep(i, k.b)), bt = bb < 0.1 ? bb.toFixed(3) : bb.toFixed(2);
+  const head = i === NTOT
+    ? `총부양비가 1 늘어나고 그 증가분이 유소년:노년 = ${mixTxt}(25개 구 평균 비율)로 나뉘어 반영되면, 다른 지표를 함께 고려했을 때 ${COLS[c].label}이 ${bt}%p ${dir}지는 경향`
+    : `다른 지표를 함께 고려했을 때 ${ROWS[i].label}가 ${stepLbl(i)} 높은 구일수록 ${COLS[c].label}이 ${bt}%p ${dir}지는 경향`;
+  return [head, sig ? `p=${fp(k.p)}로 5% 수준에서 유의합니다.` : `p=${fp(k.p)}로 유의하지 않습니다(우연과 구분하기 어려움).`];
+}
+
+/* ───────── 툴팁 ───────── */
+const tip = $('#tip');
+function showTip(build, ev) { tip.replaceChildren(); build(tip); tip.classList.add('on'); moveTip(ev); }
+function moveTip(ev) { const r = tip.getBoundingClientRect(); let x = ev.clientX + 16, y = ev.clientY + 14; if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 16; if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14; tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px'; }
+const hideTip = () => tip.classList.remove('on');
+const tipRow = (p, l, v) => { const r = H('div', { class: 'row' }, p); H('span', { class: 'l', text: l }, r); H('span', { class: 'v', text: v }, r); };
+
+/* ───────── 히트맵 ───────── */
+function renderHeatmap() {
+  const hm = $('#hm'); hm.replaceChildren();
+  H('div', {}, hm);
+  COLS.forEach((c, j) => {
+    const mo = model(j), h = H('div', { class: 'ch-h', 'data-c': j }, hm);
+    const b = H('b', {}, h); const i = H('i', {}, b); i.style.setProperty('--k', c.css); b.append(c.label);
+    H('span', { text: c.sub }, h);
+    const g = H('div', { class: 'gauge', role: 'img', 'aria-label': `설명력 R² ${mo.r2.toFixed(2)}` }, h); const gi = H('i', {}, g); gi.style.width = (mo.r2 * 100).toFixed(1) + '%'; gi.style.background = c.css;
+    H('em', { text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)}` }, h);
+    H('em', { text: `F검정 ${pTxt(mo.pF)}` }, h);
+  });
+  ROWS.forEach((r, i) => {
+    const rh = H('div', { class: 'rh', 'data-r': i }, hm); H('b', { text: r.label }, rh); H('span', { text: r.desc }, rh);
+    COLS.forEach((c, j) => {
+      const k = coefOf(i, j), bg = colorOf(k.beta);
+      const b = H('button', { class: 'cell', type: 'button', 'data-r': i, 'data-c': j, 'aria-pressed': String(!!state.sel && state.sel[0] === i && state.sel[1] === j), 'aria-label': `${r.label} → ${c.label} 표준화 계수 ${fr(k.beta)}` }, hm);
+      b.style.backgroundColor = bg; b.style.color = textOn(bg);
+      H('span', { class: 'v n', text: fr(k.beta) }, b); H('span', { class: 't n' + (k.p < 0.05 ? ' sig' : ''), text: (k.p < 0.05 ? '유의 · ' : '') + pTxt(k.p) }, b);
+      b.addEventListener('click', () => { state.sel = [i, j]; state.pin = null; renderAll(); });
+      b.addEventListener('pointerenter', e => { mark(i, j, true); showTip(p => { H('div', { class: 'tt', text: `${r.label} → ${c.label}` }, p); tipRow(p, '표준화 계수 β', fr(k.beta)); tipRow(p, `효과 B (${stepLbl(i)}당)`, `${fb(bStep(i, k.b))}%p`); tipRow(p, '95% 신뢰구간', `[${fb(bStep(i, k.lo))}, ${fb(bStep(i, k.hi))}]`); tipRow(p, 'p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')); }, e); });
+      b.addEventListener('pointermove', moveTip);
+      b.addEventListener('pointerleave', () => { mark(i, j, false); hideTip(); });
+      b.addEventListener('focus', () => mark(i, j, true)); b.addEventListener('blur', () => mark(i, j, false));
+    });
+  });
+  const sc = $('#scale'); sc.replaceChildren();
+  const stops = Array.from({ length: 15 }, (_, k) => colorOf(-SAT + 2 * SAT * k / 14));
+  H('span', { text: '음(−) 효과' }, sc);
+  const bar = H('div', { class: 'bar' }, sc); bar.style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+  H('span', { text: '양(+) 효과' }, sc);
+  const lab = H('div', { class: 'lab' }, sc); ['−1.5', '−0.75', '0', '+0.75', '+1.5'].forEach(t => H('span', { text: t }, lab));
+  H('small', { text: '색이 진할수록(다크 모드에서는 밝고 선명할수록) |β|가 큽니다 (|β| 1.5 이상은 같은 진하기). 빨간색 = 그 지표가 높은 구일수록 결과가 높은 효과, 파란색 = 낮은 효과, 회색에 가까울수록 차이 없음. “유의”는 p < 0.05.' }, sc);
+}
+function mark(i, j, on) {
+  document.querySelectorAll('.hm .rh').forEach(n => n.classList.toggle('on', on && +n.dataset.r === i));
+  document.querySelectorAll('.hm .ch-h').forEach(n => n.classList.toggle('on', on && +n.dataset.c === j));
+}
+
+/* ───────── 상세: 부분 회귀 산점도 + 계수표 ───────── */
+function niceTicks(lo, hi, n = 5) {
+  const raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, step = (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+  const out = []; for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10)); return out;
+}
+function renderDetail() {
+  const [i, j] = state.sel, k = coefOf(i, j), col = COLS[j], mo = model(j), R = ROWS[i];
+  $('#dt-title').textContent = `${R.label} → ${col.label}`;
+  $('#dt-sub').textContent = `점 하나가 구 하나(25개 구) · 가로축은 ${R.label}${i === NTOT ? '(유소년+노년)' : ''}, 세로축은 ${col.label}에서 다른 지표의 영향을 뺀 값입니다`;
+  const top = $('#dt-top'); top.replaceChildren();
+  const big = H('div', { class: 'big n', text: fr(k.beta) }, top); big.style.color = col.css === 'var(--turn)' ? 'var(--ink)' : col.css;
+  const sx = H('div', { class: 'st' }, top);
+  [['표준화 계수 β', fr(k.beta)], [`효과 B (${stepLbl(i)}당)`, `${fb(bStep(i, k.b))}%p`], ['95% 신뢰구간', `[${fb(bStep(i, k.lo))}, ${fb(bStep(i, k.hi))}]`], ['p값', fp(k.p) + (k.p < 0.05 ? ' (유의)' : '')]]
+    .forEach(([a, b]) => { const d = H('div', {}, sx); H('b', { class: 'n', text: b }, d); d.append(a); });
+  const [s1, s2] = sentence(i, j); const rd = $('#dt-read'); rd.replaceChildren(); H('b', { text: s1 + '. ' }, rd); rd.append(s2);
+  if (k.vif >= 10) H('span', { class: 'warn', text: ` 이 지표는 다른 지표와 정보가 많이 겹쳐(VIF ${k.vif.toFixed(0)}) 계수가 불안정할 수 있습니다.` }, rd);
+
+  const host = $('#sc'); host.replaceChildren();
+  const W = Math.max(300, host.clientWidth || 560), Hh = 340, m = { l: 50, r: 22, t: 30, b: 48 };
+  const svg = S('svg', { width: W, height: Hh, viewBox: `0 0 ${W} ${Hh}`, role: 'img', 'aria-label': `${R.label}와 ${col.label}의 부분잔차 산점도` }, host);
+  const xs = k.cpr.map(a => a[0]), ys = k.cpr.map(a => a[1]);
+  const pad = (a, b) => [a - (b - a) * .1, b + (b - a) * .1];
+  const [x0, x1] = pad(Math.min(...xs), Math.max(...xs)), [y0, y1] = pad(Math.min(...ys), Math.max(...ys));
+  const X = v => m.l + (W - m.l - m.r) * (v - x0) / (x1 - x0), Y = v => m.t + (Hh - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+  const fy = v => v.toFixed(0) + '%';
+  niceTicks(y0, y1).forEach(v => { S('line', { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: 'var(--grid)' }, svg); const t = S('text', { x: m.l - 8, y: Y(v), class: 'tick', 'text-anchor': 'end', 'dominant-baseline': 'central' }, svg); t.textContent = fy(v); });
+  niceTicks(x0, x1).forEach(v => { const t = S('text', { x: X(v), y: Hh - m.b + 18, class: 'tick', 'text-anchor': 'middle' }, svg); t.textContent = v.toFixed(R.dec === 0 ? 0 : 1); });
+  S('line', { x1: m.l, x2: W - m.r, y1: Hh - m.b, y2: Hh - m.b, stroke: 'var(--axis)' }, svg);
+  const xt = S('text', { x: m.l + (W - m.l - m.r) / 2, y: Hh - 6, class: 'xl', 'text-anchor': 'middle' }, svg); xt.textContent = R.unit ? `${R.label} (${R.unit})` : R.label;
+  const yt = S('text', { x: 0, y: 12, class: 'tick' }, svg); yt.textContent = `${col.label} (다른 지표의 영향을 뺀 값, %)`;
+  // 회귀선: 부분잔차 = a + b·x 이므로 기울기가 이 지표의 계수 B
+  S('line', { x1: X(x0), y1: Y(mo.a + k.b * x0), x2: X(x1), y2: Y(mo.a + k.b * x1), stroke: 'var(--ink2)', 'stroke-width': 2, 'stroke-linecap': 'round' }, svg);
+  const pc = col.css === 'var(--turn)' ? 'var(--ink2)' : col.css;
+  const res = ys.map((y, n) => y - (mo.a + k.b * xs[n])), sdr = Math.sqrt(res.reduce((a, b) => a + b * b, 0) / mo.df);
+  const labeled = new Set(); res.forEach((e, n) => { if (Math.abs(e) > 1.5 * sdr) labeled.add(n); });
+  labeled.add(xs.indexOf(Math.min(...xs))); labeled.add(xs.indexOf(Math.max(...xs)));
+  if (state.pin !== null) labeled.add(state.pin);
+  const dots = [];
+  G.forEach((d, n) => {
+    const on = state.pin === n;
+    dots.push(S('circle', { cx: X(xs[n]), cy: Y(ys[n]), r: on ? 6.5 : 5, fill: pc, stroke: on ? 'var(--ink)' : 'var(--surface)', 'stroke-width': on ? 2.5 : 2, 'fill-opacity': .92 }, svg));
+    if (labeled.has(n)) { const t = S('text', { x: X(xs[n]) + 9, y: Y(ys[n]) - 7, class: 'lbl' }, svg); t.textContent = d.name; }
+  });
+  const hit = S('rect', { x: m.l, y: m.t, width: W - m.l - m.r, height: Hh - m.t - m.b, fill: 'transparent', style: 'cursor:pointer' }, svg);
+  const near = e => { const b = svg.getBoundingClientRect(), s0 = W / b.width, px = (e.clientX - b.left) * s0, py = (e.clientY - b.top) * s0; let best = -1, bd = 1e9; G.forEach((_, n) => { const dd = Math.hypot(X(xs[n]) - px, Y(ys[n]) - py); if (dd < bd) { bd = dd; best = n; } }); return bd < 36 ? best : -1; };
+  let last = -1;
+  const over = e => {
+    const n = near(e); if (last >= 0 && last !== n) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5);
+    last = n; if (n < 0) { hideTip(); return; }
+    dots[n].setAttribute('r', 7.5);
+    showTip(p => { H('div', { class: 'tt', text: G[n].name }, p); tipRow(p, R.label, fx(i, xs[n])); tipRow(p, col.label + ' (실제)', f1(G[n][col.key]) + '%'); tipRow(p, '다른 지표 영향을 뺀 값', f1(ys[n]) + '%'); tipRow(p, '회귀선과의 차이', (res[n] >= 0 ? '+' : '−') + Math.abs(res[n]).toFixed(1) + '%p'); }, e);
+  };
+  hit.addEventListener('pointermove', over); hit.addEventListener('pointerenter', over);
+  hit.addEventListener('pointerleave', () => { if (last >= 0) dots[last].setAttribute('r', state.pin === last ? 6.5 : 5); last = -1; hideTip(); });
+  hit.addEventListener('click', e => { const n = near(e); state.pin = n < 0 || n === state.pin ? null : n; renderDetail(); });
+  const ky = $('#sc-keys'); ky.replaceChildren();
+  let sp = H('span', {}, ky); const d = H('span', { class: 'dot' }, sp); d.style.setProperty('--k', pc); sp.append('구 (점을 누르면 이름 고정)');
+  sp = H('span', {}, ky); H('span', { class: 'ln' }, sp); sp.append(`회귀선 (${stepLbl(i)}당 B ${fb(bStep(i, k.b))})`);
+
+  // 계수표 (선택한 결과변수의 전체 모형: 6개 행 모두)
+  const cf = $('#coef'); cf.replaceChildren();
+  H('p', { class: 'sec', text: `${col.label} 다중 회귀 모형 (n=${mo.n}, 잔차 자유도 ${mo.df})` }, cf);
+  H('p', { class: 'fit', text: `R² ${mo.r2.toFixed(2)} · 수정 R² ${mo.adj.toFixed(2)} · F=${mo.F.toFixed(2)} (p=${fp(mo.pF)}) → ${mo.pF < 0.05 ? '모형 전체가 유의합니다' : '모형 전체가 유의하지 않습니다'}` }, cf);
+  const wrap = H('div', { class: 'coef-wrap' }, cf), t = H('table', {}, wrap), h = H('tr', {}, H('thead', {}, t));
+  ['지표 (B 단위)', 'B', 'β', '95% 신뢰구간', 'p', 'VIF'].forEach(x => H('th', { text: x }, h));
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const c = coefOf(n, j), tr = H('tr', {}, tb); if (n === i) tr.className = 'on';
+    [`${r.label} (${stepLbl(n)}당)`, fb(bStep(n, c.b)), fr(c.beta), `[${fb(bStep(n, c.lo))}, ${fb(bStep(n, c.hi))}]`, fp(c.p) + (c.p < 0.05 ? ' *' : ''), c.vif.toFixed(1)].forEach(x => H('td', { text: x }, tr));
+  });
+}
+
+/* ───────── 헤더 / 표 ───────── */
+function bestCell() {
+  let best = null;
+  ROWS.forEach((_, i) => COLS.forEach((_, j) => { const k = coefOf(i, j); const score = Math.abs(k.beta) + (k.p < 0.05 ? 10 : 0); if (!best || score > best.s) best = { i, j, s: score }; }));
+  return [best.i, best.j];
+}
+function renderHeader() {
+  const [bi, bj] = bestCell(), k = coefOf(bi, bj);
+  $('#headline').textContent = `${pick(ROWS[bi].label, '은', '는')} 다른 인구지표를 함께 고려해도 ${pick(COLS[bj].label, '과', '와')} 가장 뚜렷하게 연결된다`;
+  const fitTxt = COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)}`).join(' · ');
+  $('#subline').textContent = `인구지표(부양비·노령화지수·중위연령·평균연령)를 한꺼번에 넣은 다중 회귀(25개 구)입니다 — ${fitTxt}. 각 값은 지표끼리 크기를 비교할 수 있게 표준화한 계수 β입니다.`;
+  const hero = $('#hero'); hero.replaceChildren();
+  H('div', { class: 'num n', text: fr(k.beta) }, hero); H('div', { class: 'cap', text: `β · ${ROWS[bi].label} → ${COLS[bj].label}${k.p < 0.05 ? ' (p<0.05)' : ''}` }, hero);
+  return [bi, bj];
+}
+function renderTables() {
+  const a = $('#t-models'); a.replaceChildren();
+  const t = H('table', {}, a), h = H('tr', {}, H('thead', {}, t));
+  H('th', { text: '인구지표 (B 단위)' }, h); COLS.forEach(c => ['B', 'β', 'p'].forEach(x => H('th', { text: `${c.label.replace(' 득표율', '')} ${x}` }, h))); H('th', { text: 'VIF' }, h);
+  const tb = H('tbody', {}, t);
+  ROWS.forEach((r, n) => {
+    const tr = H('tr', {}, tb); H('td', { text: `${r.label} (${stepLbl(n)}당)` }, tr);
+    COLS.forEach((_, j) => { const c = coefOf(n, j); [fb(bStep(n, c.b)), fr(c.beta), fp(c.p) + (c.p < 0.05 ? ' *' : '')].forEach(x => H('td', { text: x }, tr)); });
+    H('td', { text: coefOf(n, 0).vif.toFixed(1) }, tr);
+  });
+  H('caption', { text: `${COLS.map((c, j) => `${c.label} R² ${model(j).r2.toFixed(2)} (수정 ${model(j).adj.toFixed(2)}, F p=${fp(model(j).pF)})`).join(' · ')} · B = 해당 단위만큼 높은 구에서 결과가 몇 %p 다른지 · * p<0.05` }, t);
+  const g = $('#t-gu'); g.replaceChildren();
+  const t2 = H('table', {}, g), h2 = H('tr', {}, H('thead', {}, t2));
+  ['자치구', ...ROWS.map(r => r.label), '전체 투표율', '윤석열 %', '이재명 %'].forEach(x => H('th', { text: x }, h2));
+  const tb2 = H('tbody', {}, t2);
+  G.forEach(d => { const tr = H('tr', {}, tb2); [d.name, ...ROWS.map((_, i) => d.x[i].toFixed(ROWS[i].dec)), f1(d.turn), f1(d.yoon), f1(d.lee)].forEach(x => H('td', { text: x }, tr)); });
+}
+function renderAll() {
+  const th = document.documentElement.dataset.theme || 'auto';
+  document.querySelectorAll('#seg-theme button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === th)));
+  const best = renderHeader(); if (!state.sel) state.sel = best;
+  renderHeatmap(); renderDetail(); renderTables();
+}
+$('#seg-theme').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = b.dataset.v; });
+renderAll();
+let rz; new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(renderDetail, 80); }).observe($('#c-detail'));
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

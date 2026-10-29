@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/* 다크 모드는 <html data-theme="dark"> 로 제어 (자동/라이트/다크 선택은 useTheme 에서 해석) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ───────── 디자인 토큰 ─────────
+   종이(paper) 위에 흰 카드(surface), 진한 잉크 타이포.
+   파랑(진보)·빨강(보수)은 데이터를 가리킬 때만 쓴다. pos(빨강)·neg(파랑)은 히트맵의 +/− 효과 색. */
+:root {
+  --paper: #f3f4f0;
+  --paper-2: #eceee8;
+  --surface: #ffffff;
+  --surface-2: #f8f9f6;
+  --ink: #0d1110;
+  --ink-2: #474d4a;
+  --muted: #7b817d;
+  --line: rgb(13 17 16 / 0.09);
+  --line-strong: rgb(13 17 16 / 0.18);
+  --wash: rgb(13 17 16 / 0.045);
+  --lee: #1766e0;
+  --yoon: #e22d2b;
+  --pos: #c62c27;
+  --neg: #1f5fd0;
+  --focus: #0d1110;
+  --shadow-card: 0 1px 0 rgb(13 17 16 / 0.04), 0 10px 30px -12px rgb(13 17 16 / 0.18);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --paper: #0b0c0c;
+  --paper-2: #111312;
+  --surface: #161817;
+  --surface-2: #1c1e1d;
+  --ink: #f1f2ee;
+  --ink-2: #bcc1bd;
+  --muted: #8a908c;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: rgb(255 255 255 / 0.17);
+  --wash: rgb(255 255 255 / 0.05);
+  --lee: #4a92f5;
+  --yoon: #f45a56;
+  --pos: #ff6b63;
+  --neg: #6aa5ff;
+  --focus: #f1f2ee;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03), 0 18px 40px -16px rgb(0 0 0 / 0.7);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-wash: var(--wash);
+  --color-lee: var(--lee);
+  --color-yoon: var(--yoon);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --font-sans: "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+  --shadow-card: var(--shadow-card);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background: var(--paper);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss06";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--lee) 22%, transparent);
+  }
+}
+
+@layer utilities {
+  .tnum {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* 진보·보수를 나누는 브랜드 표식 (파랑|빨강) */
+  .split-mark {
+    background: linear-gradient(90deg, var(--lee) 0 50%, var(--yoon) 50% 100%);
+  }
+  .dot-grid {
+    background-image: radial-gradient(var(--line-strong) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+}
+
+/* 종이 질감 (히어로 전용, 아주 옅게) */
+.grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+}
+[data-theme="dark"] .grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.07;
+  mix-blend-mode: screen;
+}
+@keyframes breathe {
+  from { transform: scale(1); opacity: 0.7; }
+  to { transform: scale(1.12); opacity: 1; }
+}
+@keyframes orbit {
+  to { transform: rotate(360deg); }
+}
+@keyframes wheel {
+  0% { transform: translateY(0); opacity: 1; }
+  70% { transform: translateY(10px); opacity: 0; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
+@keyframes loadbar {
+  0% { transform: translateX(-100%) scaleX(0.4); }
+  60% { transform: translateX(40%) scaleX(0.6); }
+  100% { transform: translateX(110%) scaleX(0.4); }
+}
+@keyframes drip {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(330%); }
+}
+/* 액체 금속 버튼: 셰이더 캔버스가 테두리 영역을 꽉 채우게 */
+.lm-shader canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  border-radius: 9999px !important;
+}
+@keyframes lm-ripple {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(4); opacity: 0; }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

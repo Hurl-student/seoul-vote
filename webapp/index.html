@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="서울 25개 자치구의 인구·가구 구조와 제20대 대통령선거 투표율·득표율을 다중 회귀로 분석한 팀 양천허씨의 데이터 웹앱" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f3f4f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0b0c0c" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="서울의 표심은 어디서 갈렸나 · 팀 양천허씨" />
+    <meta property="og:description" content="서울 25개 자치구의 연령·가구·인구 구조와 제20대 대선 투표율·득표율을 다중 회귀로 읽은 데이터 웹앱" />
+    <title>서울의 표심 · 팀 양천허씨</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1110'/%3E%3Crect x='7' y='13' width='9' height='6' rx='1.5' fill='%231766e0'/%3E%3Crect x='16' y='13' width='9' height='6' rx='1.5' fill='%23e22d2b'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./fonts/pretendard/pretendardvariable-dynamic-subset.css" />
+    <script>
+      // 첫 페인트 전에 테마를 정해 깜빡임을 막는다 (저장값 → 시스템 설정)
+      (function () {
+        var pref = "auto";
+        try { pref = localStorage.getItem("svl-theme") || "auto"; } catch (e) {}
+        var dark = pref === "dark" || (pref === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

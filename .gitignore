@@ -1,0 +1,12 @@
+# 의존성·빌드 결과 (npm install / npm run build 로 다시 생김)
+webapp/node_modules/
+webapp/dist/
+# npm run sync 가 ../viz 와 node_modules 에서 복사해 만드는 파일
+webapp/public/viz/
+webapp/public/fonts/
+# 파이썬 캐시
+__pycache__/
+*.pyc
+# OS
+Thumbs.db
+.DS_Store
